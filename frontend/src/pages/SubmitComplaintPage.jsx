@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { submitComplaint } from '../api/client'
 import toast from 'react-hot-toast'
 
+const MIN_DESCRIPTION_LENGTH = 20
+
 function getCategoryClass(category) {
   const map = {
     electricity: 'badge-electricity',
@@ -37,8 +39,8 @@ export default function SubmitComplaintPage() {
       setError('Title is required.')
       return
     }
-    if (form.description.trim().length < 20) {
-      setError('Description must be at least 20 characters.')
+    if (form.description.trim().length < MIN_DESCRIPTION_LENGTH) {
+      setError(`Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`)
       return
     }
     setLoading(true)

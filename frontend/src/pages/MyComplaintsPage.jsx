@@ -74,7 +74,7 @@ export default function MyComplaintsPage() {
   const [complaints, setComplaints] = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [filters, setFilters] = useState({
     category: '', department: '', priority: '', status: '',
   })
@@ -96,10 +96,13 @@ export default function MyComplaintsPage() {
       const data = res.data
       if (Array.isArray(data)) {
         setComplaints(data)
-        setTotal(data.length < PAGE_SIZE ? (page - 1) * PAGE_SIZE + data.length : page * PAGE_SIZE + 1)
+        setHasMore(data.length === PAGE_SIZE)
       } else {
-        setComplaints(data.items || data.complaints || [])
-        setTotal(data.total || 0)
+        const items = data.items || data.complaints || []
+        setComplaints(items)
+        setHasMore(data.total != null
+          ? page * PAGE_SIZE < data.total
+          : items.length === PAGE_SIZE)
       }
     } catch (err) {
       toast.error('Failed to load complaints')
@@ -126,7 +129,7 @@ export default function MyComplaintsPage() {
     )
   }
 
-  const totalPages = Math.ceil(total / PAGE_SIZE) || 1
+
 
   return (
     <div className="container" style={{ padding: '2rem 1rem' }}>
@@ -261,7 +264,7 @@ export default function MyComplaintsPage() {
           <span className="page-info">Page {page}</span>
           <button
             className="btn btn-secondary btn-sm"
-            disabled={complaints.length < PAGE_SIZE}
+            disabled={!hasMore}
             onClick={() => setPage((p) => p + 1)}
           >
             Next →
