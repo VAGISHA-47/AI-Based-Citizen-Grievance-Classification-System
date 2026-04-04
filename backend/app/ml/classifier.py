@@ -40,6 +40,9 @@ URGENT_KEYWORDS = [
     "accident", "death", "critical", "severe", "help",
 ]
 
+DEFAULT_CONFIDENCE = 0.2
+DEFAULT_SENTIMENT = -0.1  # complaints are generally negative
+
 _MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models")
 
 
@@ -123,7 +126,7 @@ class GrievanceClassifier:
         best_score = scores[best_category]
 
         if best_score == 0:
-            return "public_services", 0.2
+            return "public_services", DEFAULT_CONFIDENCE
 
         total = sum(scores.values())
         confidence = best_score / total if total > 0 else 0.2
@@ -156,5 +159,5 @@ class GrievanceClassifier:
         neg = sum(1 for t in tokens if t in negative_words)
         total = pos + neg
         if total == 0:
-            return -0.1  # complaints are generally negative
+            return DEFAULT_SENTIMENT
         return (pos - neg) / total

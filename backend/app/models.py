@@ -15,7 +15,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(String(20), default="citizen")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
 
     complaints = relationship("Complaint", back_populates="user")
 
@@ -35,7 +35,7 @@ class Complaint(Base):
     sentiment_score = Column(Float, nullable=True)
     status = Column(String(20), default="pending")
     confidence_score = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+    updated_at = Column(DateTime, default=lambda: datetime.utcnow(), onupdate=lambda: datetime.utcnow())
 
     user = relationship("User", back_populates="complaints")

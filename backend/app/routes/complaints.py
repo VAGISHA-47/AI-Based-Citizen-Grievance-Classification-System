@@ -25,7 +25,7 @@ def submit_complaint(
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     # Language detection & optional translation
-    full_text = f"{complaint_in.title} {complaint_in.description}"
+    full_text = f"{complaint_in.title}. {complaint_in.description}"
     lang = _preprocessor.detect_language(full_text)
     translated = None
     text_for_classification = full_text
