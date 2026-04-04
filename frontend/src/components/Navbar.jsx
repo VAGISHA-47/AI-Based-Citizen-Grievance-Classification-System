@@ -46,11 +46,11 @@ export default function Navbar() {
               <span style={{ fontSize: '0.875rem', color: '#475569' }}>
                 {user.username}
               </span>
-              <span className={`badge badge-${user.is_admin ? 'urgent' : 'normal'}`}
+              <span className={`badge badge-${user.role === 'admin' ? 'urgent' : 'normal'}`}
                 style={{ fontSize: '0.7rem' }}>
-                {user.is_admin ? 'Admin' : 'Citizen'}
+                {user.role === 'admin' ? 'Admin' : user.role === 'department_officer' ? 'Officer' : 'Citizen'}
               </span>
-              {user.is_admin && (
+              {user.role === 'admin' && (
                 <Link to="/admin" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
                   Dashboard
                 </Link>

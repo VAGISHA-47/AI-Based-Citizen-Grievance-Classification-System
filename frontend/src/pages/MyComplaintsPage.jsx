@@ -69,7 +69,7 @@ function StatusSelect({ complaint, onUpdate }) {
 export default function MyComplaintsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.is_admin
+  const isAdmin = user?.role === 'admin' || user?.role === 'department_officer'
 
   const [complaints, setComplaints] = useState([])
   const [loading, setLoading] = useState(true)

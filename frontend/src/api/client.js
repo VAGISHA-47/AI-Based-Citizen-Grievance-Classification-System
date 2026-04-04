@@ -13,9 +13,7 @@ client.interceptors.request.use((config) => {
 })
 
 export const login = (username, password) =>
-  client.post('/auth/token', new URLSearchParams({ username, password }), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  })
+  client.post('/auth/login', { username, password })
 
 export const register = (username, email, password) =>
   client.post('/auth/register', { username, email, password })

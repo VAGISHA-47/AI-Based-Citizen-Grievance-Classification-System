@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.db
+*.sqlite3
+*.egg-info/
+dist/
+build/
+.env
+.env.local
+
+# Node
+node_modules/
+frontend/dist/
+
+# ML artefacts (keep models/ checked in)
+backend/grievances.db
+
+# OS
+.DS_Store
+Thumbs.db

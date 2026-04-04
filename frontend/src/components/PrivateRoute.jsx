@@ -18,7 +18,7 @@ export default function PrivateRoute({ children, adminOnly = false }) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (adminOnly && !user.is_admin) {
+  if (adminOnly && user.role !== 'admin') {
     return <Navigate to="/" replace />
   }
 

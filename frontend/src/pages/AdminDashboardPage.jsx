@@ -31,7 +31,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user?.is_admin) {
+    if (!user || user.role !== 'admin') {
       navigate('/', { replace: true })
       return
     }
@@ -56,7 +56,7 @@ export default function AdminDashboardPage() {
     fetchAll()
   }, [user, navigate])
 
-  if (!user?.is_admin) return null
+  if (!user || user.role !== 'admin') return null
 
   if (loading) {
     return (
