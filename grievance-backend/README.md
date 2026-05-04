@@ -128,6 +128,13 @@ The backend implements role-based access control for three roles:
 - **JWT utilities:** Token creation/verification and password hashing helpers live in `app/utils/auth.py`. They are database-agnostic and ready for integration with login routes and user persistence implemented by the database teammate.
 - **Database work:** SQLAlchemy models, migrations, and database connection code will be added by the teammate responsible for DB. This repository currently keeps database variables as placeholders in `.env`.
 
+## AI Pipeline Integration Placeholder (Phase 6)
+
+- **Placeholder pipeline:** The backend now includes a lightweight AI pipeline placeholder at `app/services/ai_pipeline.py`. This async function returns a simple dict and is enqueued as a background task when a grievance is submitted.
+- **Background processing:** The grievance submission endpoint (`POST /grievances/`) now accepts `BackgroundTasks` and queues `run_ai_pipeline` using a temporary `mock_grievance_id` so the AI teammate can integrate their pipeline later.
+- **No AI packages included:** No AI/ML libraries or models are installed or loaded. Real preprocessing, translation, classification, priority detection, sentiment analysis, and duplicate detection will be implemented by the AI teammate.
+- **Database & AI integration:** Database persistence and AI model integration are left for the respective teammates; this backend provides the route contracts and background task hooks.
+
 ## Dependencies
 
 - **fastapi** - Web framework
