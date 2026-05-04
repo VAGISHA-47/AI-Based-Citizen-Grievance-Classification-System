@@ -122,6 +122,12 @@ The backend implements role-based access control for three roles:
 - **Single Shared Backend:** Both the User/Citizen frontend and Authority/Admin frontend will use this same backend. Keep user-facing routes under `/api/user` and authority routes under `/api/authority`.
 - **RBAC:** Role-based access control for `USER`, `AUTHORITY`, and `ADMIN` roles will be added in a later phase.
 
+## Schemas & Auth Utilities (Phase 4)
+
+- **Pydantic schemas:** API request/response shapes are defined using Pydantic in `app/models/schemas.py`. These schemas validate inputs (e.g., `UserCreate`, `GrievanceCreate`) and shape responses (e.g., `UserResponse`, `GrievanceResponse`).
+- **JWT utilities:** Token creation/verification and password hashing helpers live in `app/utils/auth.py`. They are database-agnostic and ready for integration with login routes and user persistence implemented by the database teammate.
+- **Database work:** SQLAlchemy models, migrations, and database connection code will be added by the teammate responsible for DB. This repository currently keeps database variables as placeholders in `.env`.
+
 ## Dependencies
 
 - **fastapi** - Web framework

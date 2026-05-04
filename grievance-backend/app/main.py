@@ -8,7 +8,7 @@ for both user and authority endpoints.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import user_routes, authority_routes
+from app.api import user_routes, authority_routes, auth, grievances
 from app.config import settings
 
 
@@ -59,6 +59,11 @@ app.include_router(
     prefix="/api/authority",
     tags=["Authority"],
 )
+
+
+# Phase 5: Include auth and grievance route contracts (mock responses)
+app.include_router(auth.router)
+app.include_router(grievances.router)
 
 
 if __name__ == "__main__":
