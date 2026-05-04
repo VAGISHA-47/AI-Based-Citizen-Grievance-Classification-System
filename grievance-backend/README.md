@@ -1,164 +1,237 @@
-# Grievance Backend - Phase 1
+# Grievance Backend
 
-A shared FastAPI backend serving two separate frontend applications:
-1. **User/Citizen Portal** - For filing and tracking grievances
-2. **Authority/Admin Dashboard** - For managing grievances and analytics
+This is the backend project for a grievance management system.
+
+The project uses one shared FastAPI backend. Later, two different frontend apps can connect to this same backend:
+
+- **User/Citizen web app**
+- **Authority/Officer/Admin dashboard**
+
+There is no frontend code in this repo because this repo is focused only on backend work.
+
+## My Backend Work
+
+This backend is prepared for:
+
+- FastAPI application setup
+- Environment-based configuration
+- CORS setup for frontend connection
+- JWT token generation
+- Password hashing utilities
+- Pydantic request and response schemas
+- Auth route contracts
+- Grievance submission route contract
+- Background task placeholder for AI processing
+- Duplicate detection placeholder
+- Department routing and SLA calculation logic
+- Officer dashboard API route contracts
+- WebSocket notification placeholder
+- Basic backend testing setup
+- Simple Dockerfile for running the backend
 
 ## Project Structure
 
 ```
 grievance-backend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI app entry point
-│   ├── config.py               # Configuration & environment variables
+│   ├── main.py
+│   ├── config.py
 │   ├── api/
-│   │   ├── user_routes.py      # User portal endpoints (/api/user)
-│   │   └── authority_routes.py # Authority dashboard endpoints (/api/authority)
-│   ├── models/                 # SQLAlchemy ORM models (future)
-│   ├── services/               # Business logic services (future)
-│   ├── ml/                      # ML classification module (future)
-│   ├── utils/                   # Utility functions & helpers (future)
-│   └── db/                      # Database configuration (future)
-├── requirements.txt            # Python dependencies
-├── .env                        # Environment variables
-└── .gitignore                  # Git ignore rules
+│   │   ├── auth.py
+│   │   ├── grievances.py
+│   │   ├── user_routes.py
+│   │   ├── authority_routes.py
+│   │   ├── officer.py
+│   │   └── ws.py
+│   ├── models/
+│   │   └── schemas.py
+│   ├── services/
+│   │   ├── ai_pipeline.py
+│   │   ├── dedup.py
+│   │   └── router.py
+│   ├── utils/
+│   │   └── auth.py
+│   └── db/
+├── tests/
+├── requirements.txt
+├── Dockerfile
+├── .env
+├── .gitignore
+└── README.md
 ```
 
-## API Endpoints
+## Important Team Notes
 
-### Root
-- `GET /` - Health check
 
-### User Portal API
-- `GET /api/user/health` - User API health check
-- *More endpoints coming in Phase 2*
+**I am handling:** the backend API, authentication structure, configuration, routes, and integration placeholders.
 
-### Authority Dashboard API
-- `GET /api/authority/health` - Authority API health check
-- *More endpoints coming in Phase 2*
+**Other teammates will handle:**
+- Database setup
+- PostgreSQL models
+- MongoDB storage
+- Redis cache logic
+- Alembic migrations
+- AI/ML model implementation
+- User frontend
+- Authority dashboard frontend
+- Final deployment setup
 
-## Setup Instructions
+Database and AI code are not fully implemented here yet. The backend only keeps placeholders so those parts can be connected later.
 
-### 1. Create Virtual Environment
+## Environment Variables
+
+The `.env` file contains configuration values used by the backend:
+
+```
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/grievance_db
+MONGO_URI=mongodb://localhost:27017
+REDIS_URL=redis://localhost:6379
+SECRET_KEY=your-super-secret-key-here
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+The database URLs are placeholders for future database integration.
+
+## Run Locally
+
+### Create and activate a virtual environment:
 
 ```bash
-cd grievance-backend
 python -m venv venv
-```
-
-### 2. Activate Virtual Environment
-
-**Linux/Mac:**
-```bash
 source venv/bin/activate
 ```
 
-**Windows:**
+On Windows:
+
 ```bash
 venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+### Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
-
-Edit `.env` file with your actual configuration:
-```
-DATABASE_URL=postgresql+asyncpg://username:password@localhost/grievance_db
-REDIS_URL=redis://localhost:6379
-SECRET_KEY=your-secure-secret-key
-```
-
-### 5. Run Development Server
+### Start the FastAPI server:
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-The API will be available at `http://localhost:8000`
+### Open Swagger UI:
 
-**API Documentation:**
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+```
+http://localhost:8000/docs
+```
 
-## Role-Based Access Control (RBAC)
+## Main API Routes
 
-The backend implements role-based access control for three roles:
+**Health check:**
+- `GET /health`
 
-1. **USER** - Citizen/User Portal
-   - Can view own grievances
-   - Can file new grievances
-   - Can track grievance status
+**User API health:**
+- `GET /api/user/health`
 
-2. **AUTHORITY** - Department Authority
-   - Can view assigned grievances
-   - Can update grievance status
-   - Can add comments/notes
+**Authority API health:**
+- `GET /api/authority/health`
 
-3. **ADMIN** - System Administrator
-   - Full access to all grievances
-   - Can manage users and authorities
-   - Can view analytics and reports
+**Auth routes:**
+- `POST /auth/register`
+- `POST /auth/login`
 
-*RBAC implementation to be added in Phase 2*
+**Grievance route:**
+- `POST /grievances/`
 
-## Development Notes
+**Officer routes:**
+- `GET /api/officer/assigned`
+- `PATCH /api/officer/{grievance_id}/resolve`
+- `PATCH /api/officer/{grievance_id}/status`
+- `GET /api/officer/analytics/summary`
 
-- This is a **shared backend** - do not create separate backends for each frontend
-- Always add routes to the appropriate router (`user_routes.py` or `authority_routes.py`)
-- User routes should use the `/api/user` prefix
-- Authority routes should use the `/api/authority` prefix
-- Database models, services, and ML module structure are scoped for future phases
+**WebSocket route:**
+- `/ws/officer/{officer_id}`
 
-## CORS, JWT, and RBAC (Phase 2)
+## Current Route Behavior
 
-- **CORS:** The development server is configured to allow requests from common frontend dev servers (e.g. `http://localhost:3000` and `http://localhost:5173`). This enables browser-based frontends to call the backend during development.
-- **JWT Settings:** Security-related settings such as `SECRET_KEY`, `ALGORITHM`, and `ACCESS_TOKEN_EXPIRE_MINUTES` are loaded from environment variables in the `.env` file.
-- **Single Shared Backend:** Both the User/Citizen frontend and Authority/Admin frontend will use this same backend. Keep user-facing routes under `/api/user` and authority routes under `/api/authority`.
-- **RBAC:** Role-based access control for `USER`, `AUTHORITY`, and `ADMIN` roles will be added in a later phase.
+Most routes currently return mock or placeholder responses.
 
-## Schemas & Auth Utilities (Phase 4)
+This is intentional because:
+- Database integration will be added by the database teammate
+- AI/ML processing will be added by the AI teammate
+- Frontend apps will consume these APIs later
+- The goal of this backend work is to make the API structure ready for integration
 
-- **Pydantic schemas:** API request/response shapes are defined using Pydantic in `app/models/schemas.py`. These schemas validate inputs (e.g., `UserCreate`, `GrievanceCreate`) and shape responses (e.g., `UserResponse`, `GrievanceResponse`).
-- **JWT utilities:** Token creation/verification and password hashing helpers live in `app/utils/auth.py`. They are database-agnostic and ready for integration with login routes and user persistence implemented by the database teammate.
-- **Database work:** SQLAlchemy models, migrations, and database connection code will be added by the teammate responsible for DB. This repository currently keeps database variables as placeholders in `.env`.
+## Authentication
 
-## AI Pipeline Integration Placeholder (Phase 6)
+JWT utilities are available for:
+- Creating access tokens
+- Verifying tokens
+- Hashing passwords
+- Verifying passwords
 
-- **Placeholder pipeline:** The backend now includes a lightweight AI pipeline placeholder at `app/services/ai_pipeline.py`. This async function returns a simple dict and is enqueued as a background task when a grievance is submitted.
-- **Background processing:** The grievance submission endpoint (`POST /grievances/`) now accepts `BackgroundTasks` and queues `run_ai_pipeline` using a temporary `mock_grievance_id` so the AI teammate can integrate their pipeline later.
-- **No AI packages included:** No AI/ML libraries or models are installed or loaded. Real preprocessing, translation, classification, priority detection, sentiment analysis, and duplicate detection will be implemented by the AI teammate.
-- **Database & AI integration:** Database persistence and AI model integration are left for the respective teammates; this backend provides the route contracts and background task hooks.
+Login currently creates a test JWT token. Real user verification will be connected after database integration.
 
-## Dependencies
+## AI Pipeline Placeholder
 
-- **fastapi** - Web framework
-- **uvicorn** - ASGI server
-- **pydantic** - Data validation
-- **sqlalchemy** - ORM for database operations
-- **asyncpg** - PostgreSQL async driver
-- **motor** - MongoDB async driver
-- **redis** - Caching and session management
-- **python-jose** - JWT token handling
-- **passlib** - Password hashing
-- **python-multipart** - Form data handling
+The grievance submission route can queue a background task.
 
-## Next Steps
+Currently, the AI pipeline is only a placeholder. Later, the AI teammate can add:
+- Language detection
+- Translation
+- Category classification
+- Priority detection
+- Sentiment detection
+- Duplicate detection using embeddings
 
-- Phase 2: Database models and migrations
-- Phase 3: Authentication and authorization
-- Phase 4: ML model integration
-- Phase 5: API endpoint implementation
-- Phase 6: Testing and documentation
+## Department Routing
 
+Basic department routing and SLA calculation are included as backend business logic.
 
-## Officer Dashboard & WebSocket (Phase 8)
+Example categories:
+- Roads
+- Health
+- Water
+- Education
+- Electricity
 
-- **Officer API contracts:** Backend routes for the officer dashboard are available under the `/api/officer` prefix. These include endpoints to list assigned grievances, resolve grievances, update status, and fetch analytics summaries. Current responses are temporary mock responses; real DB queries and updates will be implemented by the database teammate.
-- **WebSocket notifications:** A backend WebSocket endpoint `/ws/officer/{officer_id}` is provided in `app/api/ws.py`. Connections are stored in-memory (simple `active_connections` dict) and a `notify_officer(officer_id, message)` helper sends JSON messages to connected officers. This is a placeholder; the frontend can connect to receive notifications and the AI/DB teams can call `notify_officer` when there are updates.
-- **No DB or AI code changes:** No database queries, collections, or AI packages were added. This keeps the repo merge-friendly for the teammates responsible for those areas.
+If a category is unknown, the grievance is routed to a general department placeholder.
+
+## Testing
+
+Run tests with:
+
+```bash
+pytest tests/ -v
+```
+
+Tests are intended to check the current backend route contracts and health endpoints.
+
+## Docker
+
+A simple Dockerfile can be used to containerize only the FastAPI backend.
+
+**Build the image:**
+
+```bash
+docker build -t grievance-backend .
+```
+
+**Run the container:**
+
+```bash
+docker run -p 8000:8000 grievance-backend
+```
+
+Full Docker Compose with PostgreSQL, MongoDB, and Redis is not included here because database setup is handled separately.
+
+## Final Note
+
+This backend is not a finished full product yet. It is a clean backend foundation for a hackathon project.
+
+It is ready for teammates to connect:
+- Database logic
+- AI/ML pipeline
+- User frontend
+- Authority dashboard
