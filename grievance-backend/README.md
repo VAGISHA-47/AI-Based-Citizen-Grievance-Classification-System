@@ -228,9 +228,9 @@ Full Docker Compose with PostgreSQL, MongoDB, and Redis is not included here bec
 
 ## Final Note
 
-This backend is not a finished full product yet. It is a clean backend foundation for a hackathon project.
+This backend is not a finished full product yet. It is a clean backend foundation.
 
-It is ready for teammates to connect:
+It is ready to connect:
 - Database logic
 - AI/ML pipeline
 - User frontend
