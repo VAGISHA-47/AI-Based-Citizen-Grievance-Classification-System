@@ -155,3 +155,10 @@ The backend implements role-based access control for three roles:
 - Phase 4: ML model integration
 - Phase 5: API endpoint implementation
 - Phase 6: Testing and documentation
+
+
+## Officer Dashboard & WebSocket (Phase 8)
+
+- **Officer API contracts:** Backend routes for the officer dashboard are available under the `/api/officer` prefix. These include endpoints to list assigned grievances, resolve grievances, update status, and fetch analytics summaries. Current responses are temporary mock responses; real DB queries and updates will be implemented by the database teammate.
+- **WebSocket notifications:** A backend WebSocket endpoint `/ws/officer/{officer_id}` is provided in `app/api/ws.py`. Connections are stored in-memory (simple `active_connections` dict) and a `notify_officer(officer_id, message)` helper sends JSON messages to connected officers. This is a placeholder; the frontend can connect to receive notifications and the AI/DB teams can call `notify_officer` when there are updates.
+- **No DB or AI code changes:** No database queries, collections, or AI packages were added. This keeps the repo merge-friendly for the teammates responsible for those areas.
