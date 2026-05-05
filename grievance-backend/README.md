@@ -63,7 +63,7 @@ grievance-backend/
 ## Important Team Notes
 
 
-**I am handling:** the backend API, authentication structure, configuration, routes, and integration placeholders.
+**handling:** the backend API, authentication structure, configuration, routes, and integration placeholders.
 
 **Other teammates will handle:**
 - Database setup
