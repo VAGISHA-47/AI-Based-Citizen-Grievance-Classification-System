@@ -1,14 +1,20 @@
 """
-FastAPI application entry point for Grievance Backend
+FastAPI application entry point for Grievance Backend.
 
-This module initializes the FastAPI app and registers route routers
-for both user and authority endpoints.
+This module initializes the FastAPI app and registers legacy as well as
+JanSetu-style v1 route routers.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import user_routes, authority_routes, auth, grievances, officer, ws
+from app.api.v1 import auth as v1_auth
+from app.api.v1 import authority as v1_authority
+from app.api.v1 import grievances as v1_grievances
+from app.api.v1 import officer as v1_officer
+from app.api.v1 import users as v1_users
+from app.api.v1 import ws as v1_ws
 from app.config import settings
 
 
@@ -68,6 +74,14 @@ app.include_router(grievances.router)
 # Officer dashboard and websocket integration (Phase 8)
 app.include_router(officer.router)
 app.include_router(ws.router)
+
+# JanSetu v1 route layer (safe scaffold, legacy routes remain available)
+app.include_router(v1_auth.router)
+app.include_router(v1_users.router)
+app.include_router(v1_authority.router)
+app.include_router(v1_grievances.router)
+app.include_router(v1_officer.router)
+app.include_router(v1_ws.router)
 
 
 if __name__ == "__main__":

@@ -19,8 +19,8 @@ This backend is prepared for:
 - JWT token generation
 - Password hashing utilities
 - Pydantic request and response schemas
-- Auth route contracts
-- Grievance submission route contract
+- Legacy auth and grievance route contracts
+- JanSetu-style v1 route scaffolding
 - Background task placeholder for AI processing
 - Duplicate detection placeholder
 - Department routing and SLA calculation logic
@@ -42,7 +42,10 @@ grievance-backend/
 │   │   ├── user_routes.py
 │   │   ├── authority_routes.py
 │   │   ├── officer.py
-│   │   └── ws.py
+│   │   ├── ws.py
+│   │   └── v1/
+│   ├── services/
+│   ├── repositories/
 │   ├── models/
 │   │   └── schemas.py
 │   ├── services/
@@ -93,6 +96,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 The database URLs are placeholders for future database integration.
 
+Legacy routes still exist for testing, while new JanSetu-style routes are
+mounted under `/api/v1`. Database, AI microservice, deployment, and frontend
+work are handled separately.
+
 ## Run Locally
 
 ### Create and activate a virtual environment:
@@ -141,14 +148,29 @@ http://localhost:8000/docs
 - `POST /auth/register`
 - `POST /auth/login`
 
+**v1 auth routes:**
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+
 **Grievance route:**
 - `POST /grievances/`
+
+**v1 grievance routes:**
+- `POST /api/v1/complaints`
+- `POST /api/v1/grievances/`
 
 **Officer routes:**
 - `GET /api/officer/assigned`
 - `PATCH /api/officer/{grievance_id}/resolve`
 - `PATCH /api/officer/{grievance_id}/status`
 - `GET /api/officer/analytics/summary`
+
+**v1 officer routes:**
+- `GET /api/v1/officers/me/queue`
+- `GET /api/v1/officers/analytics/summary`
+
+**v1 user route:**
+- `GET /api/v1/users/me`
 
 **WebSocket route:**
 - `/ws/officer/{officer_id}`
