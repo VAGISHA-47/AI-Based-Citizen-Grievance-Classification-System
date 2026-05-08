@@ -8,7 +8,7 @@ import './Login.css';
 
 export function Login() {
   const navigate = useNavigate();
-  const login = useAuthStore((state) => state.login);
+  const { login, register } = useAuthStore((state) => state);
   const [activeTab, setActiveTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -17,9 +17,31 @@ export function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    login('citizen');
-    navigate('/citizen');
+    const mobile = e.target.querySelector('input[type="tel"]').value;
+    const password = e.target.querySelectorAll('input[type="password"], input[type="text"]')[0].value;
+    const result = await login(mobile, password);
+    setLoading(false);
+    if (result.success) {
+      navigate('/citizen');
+    } else {
+      alert(result.error || "Login failed. Please check your credentials.");
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const name = e.target.querySelector('input[type="text"]').value;
+    const mobile = e.target.querySelector('input[type="tel"]').value;
+    const password = e.target.querySelectorAll('input[type="password"], input[type="text"]')[1]?.value;
+    const result = await register(name, mobile, password);
+    setLoading(false);
+    if (result.success) {
+      alert("Account created! Please login.");
+      setActiveTab('login');
+    } else {
+      alert(result.error || "Registration failed.");
+    }
   };
 
   return (
@@ -111,7 +133,7 @@ export function Login() {
 
         {/* Sign Up Form */}
         {activeTab === 'signup' && (
-          <form className="login-form" onSubmit={handleLogin}>
+          <form className="login-form" onSubmit={handleSignup}>
             <div className="login-input-group">
               <label>Full Name</label>
               <div className="login-field">

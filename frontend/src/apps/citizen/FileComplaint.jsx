@@ -30,6 +30,8 @@ const AUTH_SIGNALS = [
 export function FileComplaint() {
   const [step, setStep]             = useState(0);
   const [lang, setLang]             = useState('English');
+  const [trackingToken, setTrackingToken] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [text, setText]             = useState('');
   const [wordCount, setWordCount]   = useState(0);
   const [gps, setGps]               = useState(null);
@@ -43,17 +45,45 @@ export function FileComplaint() {
 
   const captureGPS = () => {
     setGpsLoading(true);
-    setTimeout(() => {
-      setGps({ lat: 12.9716, lng: 77.5946, address: 'MG Road, Bangalore, Karnataka 560001' });
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, address: "Location captured" });
+          setGpsLoading(false);
+        },
+        () => {
+          setGps({ lat: 19.076, lng: 72.877, address: "Mumbai, Maharashtra (default)" });
+          setGpsLoading(false);
+        }
+      );
+    } else {
+      setGps({ lat: 19.076, lng: 72.877, address: "Mumbai, Maharashtra (default)" });
       setGpsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setSubmitting(false);
-    setSubmitted(true);
+    try {
+      const formData = new FormData();
+      formData.append("title", selectedCategory || "General Complaint");
+      formData.append("description", text);
+      formData.append("citizen_name", "Citizen");
+      formData.append("citizen_phone", "+910000000000");
+      formData.append("lat", gps?.lat ?? 19.076);
+      formData.append("lng", gps?.lng ?? 72.877);
+
+      const { submitGrievance } = await import('../../services/api');
+      const response = await submitGrievance(formData);
+
+      setTrackingToken(response.grievance_id || "#CMP-0000");
+      setSubmitting(false);
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Submission failed:", err);
+      alert("Submission failed. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   const authTotal = Math.round(AUTH_SIGNALS.reduce((s, a) => s + a.value, 0) / AUTH_SIGNALS.length);
@@ -71,7 +101,7 @@ export function FileComplaint() {
             <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               Your complaint has been submitted and is being processed by our AI engine.
             </p>
-            <div className="submit-success__id">#CMP-9001</div>
+            <div className="submit-success__id">{trackingToken}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
               <span>📱</span> SMS confirmation sent to +91 98765 43210
             </div>
@@ -110,7 +140,7 @@ export function FileComplaint() {
           {/* Category */}
           <div className="form-group">
             <label className="form-label">Category</label>
-            <select className="form-select">
+            <select className="form-select" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
               <option value="">Select a category…</option>
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>

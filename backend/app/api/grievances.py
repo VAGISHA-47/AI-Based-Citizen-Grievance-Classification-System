@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
 from datetime import datetime
 
 from app.services.routing_engine import run_routing_engine
@@ -68,3 +68,27 @@ async def submit_grievance(
         "status": "processing",
         "grievance_id": grievance_id,
     }
+
+
+@router.get("/track/{token}")
+async def track_complaint(token: str):
+    from app.db.mongo import grievances_collection
+
+    grievance = await grievances_collection.find_one({"tracking_token": token})
+    if not grievance:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    grievance["_id"] = str(grievance["_id"])
+    return grievance
+
+
+@router.get("/my")
+async def my_complaints():
+    # Placeholder - returns recent 10 for now
+    from app.db.mongo import grievances_collection
+
+    results = await grievances_collection.find(
+        {}, {"_id": 1, "tracking_token": 1, "status": 1, "category": 1, "created_at": 1}
+    ).sort("created_at", -1).limit(10).to_list(10)
+    for r in results:
+        r["_id"] = str(r["_id"])
+    return results
