@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { getAssignedComplaints, getAnalytics } from '../../services/api';
 import CountUpBase from 'react-countup';
 const CountUp = CountUpBase.default || CountUpBase;
 
@@ -53,6 +54,37 @@ const FILTERS = ['All (142)', 'High Priority (28)', 'SLA Warning (18)'];
 
 export function Dashboard() {
   const [activeFilter, setActiveFilter] = useState(0);
+  const [queueItems, setQueueItems] = useState(complaints);
+  const [analytics, setAnalytics] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const queue = await getAssignedComplaints();
+        if (queue?.grievances?.length) {
+          setQueueItems(queue.grievances);
+        }
+      } catch {
+        // fall back to local placeholder data
+      }
+
+      try {
+        const summary = await getAnalytics();
+        setAnalytics(summary);
+      } catch {
+        // ignore and keep fallback values
+      }
+    };
+
+    load();
+  }, []);
+
+  const kpis = analytics?.summary || {
+    total_assigned: 142,
+    pending: 28,
+    in_progress: 18,
+    resolved: 45,
+  };
 
   return (
     <div className="animate-fade-in">
@@ -60,10 +92,10 @@ export function Dashboard() {
       {/* KPI Strip */}
       <div className="kpi-grid stagger-children" style={{ marginBottom: 28 }}>
         {[
-          { label: 'Total Complaints', value: '1,284', trend: '+12%', up: true  },
-          { label: 'Active Cases',     value: '142',   trend: '-5%',  up: false },
-          { label: 'SLA Breaches',     value: '18',    trend: '⚠ Alert', up: false, red: true },
-          { label: 'Resolved Today',   value: '45',    trend: '+8%',  up: true, green: true },
+          { label: 'Total Complaints', value: String(kpis.total_assigned || 0), trend: '+12%', up: true  },
+          { label: 'Active Cases',     value: String(kpis.pending || 0),   trend: '-5%',  up: false },
+          { label: 'SLA Breaches',     value: String(kpis.in_progress || 0),    trend: '⚠ Alert', up: false, red: true },
+          { label: 'Resolved Today',   value: String(kpis.resolved || 0),   trend: '+8%',  up: true, green: true },
         ].map((k, i) => (
           <GlassCard key={i} layer={3} className="kpi-card animate-fade-up">
             <span className="kpi-card__label">{k.label}</span>
@@ -101,7 +133,7 @@ export function Dashboard() {
           </div>
 
           {/* Queue Cards */}
-          {complaints.map(c => (
+          {queueItems.map(c => (
             <GlassCard key={c.id} layer={2} className={`queue-card priority-border-${c.priority} ${c.critical ? 'critical' : ''}`}>
               {c.critical && <div className="active-badge">ACTIVE</div>}
               <PriorityBorder priority={c.priority} />

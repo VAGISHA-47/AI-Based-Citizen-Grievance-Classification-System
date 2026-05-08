@@ -7,13 +7,24 @@ export const useAuthStore = create((set) => ({
   loading: false,
   error: null,
 
-  login: async (mobile, password) => {
+  login: async (identifier, password) => {
     set({ loading: true, error: null });
     try {
-      const data = await loginUser({ email: mobile, password });
+      const data = await loginUser({ phone: identifier, password });
       localStorage.setItem("jansetu_token", data.access_token);
-      set({ token: data.access_token, user: { role: "citizen" }, loading: false });
-      return { success: true };
+      set({
+        token: data.access_token,
+        user: {
+          id: data.user_id,
+          role: data.role,
+          name: data.name,
+          officer_id: data.officer_id || null,
+          jurisdiction_assigned: Boolean(data.jurisdiction_assigned),
+          assigned_ward_id: data.assigned_ward_id || null,
+        },
+        loading: false,
+      });
+      return { success: true, ...data };
     } catch (err) {
       set({ error: err.message, loading: false });
       return { success: false, error: err.message };

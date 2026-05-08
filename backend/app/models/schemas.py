@@ -9,7 +9,7 @@ to-be-returned responses.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 
 
@@ -34,6 +34,22 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class AuthLoginRequest(BaseModel):
+    phone: str
+    password: str
+
+
+class AuthLoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    user_id: str
+    role: str
+    name: str
+    jurisdiction_assigned: bool = False
+    assigned_ward_id: Optional[int] = None
+    officer_id: Optional[str] = None
+
+
 class TokenData(BaseModel):
     user_id: Optional[str] = None
     role: Optional[str] = None
@@ -51,3 +67,74 @@ class GrievanceResponse(BaseModel):
     description: str
     channel: str
     status: str
+
+
+class LocationState(BaseModel):
+    state_id: int
+    state_name: str
+    state_code: str
+
+
+class LocationDistrict(BaseModel):
+    district_id: int
+    district_name: str
+
+
+class LocationArea(BaseModel):
+    area_id: int
+    area_name: str
+    pincode: str
+
+
+class LocationWard(BaseModel):
+    ward_id: int
+    ward_number: str
+    ward_name: str
+
+
+class ComplaintCreateRequest(BaseModel):
+    text: str
+    language: str
+    lat: float
+    lng: float
+    address: str
+    media_urls: list[str] = Field(default_factory=list)
+    category: str
+
+
+class ComplaintStatusUpdateRequest(BaseModel):
+    status: str
+    note: str = ""
+
+
+class OfficerJurisdictionUpdateRequest(BaseModel):
+    ward_id: int
+    additional_ward_ids: list[int] = Field(default_factory=list)
+
+
+class OfficerProfileResponse(BaseModel):
+    officer_id: str
+    badge_number: Optional[str] = None
+    name: str
+    email: Optional[str] = None
+    role: str
+    assigned_ward_id: Optional[int] = None
+    additional_ward_ids: list[int] = Field(default_factory=list)
+    district_id: Optional[int] = None
+    jurisdiction_assigned: bool = False
+
+
+class ComplaintTimelineEntry(BaseModel):
+    status: str
+    note: str = ""
+    created_at: str
+
+
+class ComplaintDetailResponse(BaseModel):
+    complaint_id: str
+    tracking_token: str
+    citizen: dict
+    officer: dict | None
+    complaint: dict
+    ai_analysis: dict
+    status_timeline: list[ComplaintTimelineEntry]

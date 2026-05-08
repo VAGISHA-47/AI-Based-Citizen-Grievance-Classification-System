@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter(prefix="/api/officer", tags=["officer"])
+router = APIRouter(prefix="/officer", tags=["officer"])
 
 
 class ResolveGrievanceRequest(BaseModel):

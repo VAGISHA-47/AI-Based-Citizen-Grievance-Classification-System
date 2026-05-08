@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CheckCircle2, Circle, MapPin, User, Zap, Star, MessageSquare } from 'lucide-react';
+import { trackComplaint } from '../../services/api';
 import './TrackComplaint.css';
 
 const timeline = [
@@ -63,11 +65,76 @@ function StarRating({ value, onChange }) {
 }
 
 export function TrackComplaint() {
+  const [searchParams] = useSearchParams();
+  const tokenFromQuery = searchParams.get('token') || '';
   const [rating, setRating] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [trackingToken, setTrackingToken] = useState(tokenFromQuery);
+  const [complaint, setComplaint] = useState(null);
+  const [loading, setLoading] = useState(Boolean(tokenFromQuery));
+  const [error, setError] = useState('');
+  const timelineData = useMemo(() => {
+    if (!complaint?.status_timeline?.length) return timeline;
+    return complaint.status_timeline.map((item, index) => ({
+      state: item.status,
+      date: item.created_at,
+      done: true,
+      desc: item.note || '',
+      icon: index === 0 ? '📥' : '✅',
+    }));
+  }, [complaint]);
+
+  useEffect(() => {
+    if (!trackingToken) return;
+
+    const loadComplaint = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const data = await trackComplaint(trackingToken);
+        setComplaint(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadComplaint();
+  }, [trackingToken]);
 
   return (
     <div className="track-page animate-fade-in">
+      <GlassCard layer={2} hoverEffect={true} className="track-header-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="form-input"
+            style={{ minWidth: 260, flex: 1 }}
+            placeholder="Enter tracking token (e.g. JST-1234ABCD)"
+            value={trackingToken}
+            onChange={(e) => setTrackingToken(e.target.value)}
+          />
+          <Button variant="primary" onClick={() => setTrackingToken((value) => value.trim())}>Track Complaint</Button>
+        </div>
+        {loading && <p style={{ marginTop: 12, color: 'var(--text-secondary)' }}>Loading complaint details...</p>}
+        {error && <p style={{ marginTop: 12, color: '#f87171' }}>{error}</p>}
+      </GlassCard>
+
+      {complaint && (
+        <GlassCard layer={2} hoverEffect={true} className="track-header-card">
+          <div className="track-header-card__top">
+            <div>
+              <div className="mono" style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{complaint.tracking_token}</div>
+              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{complaint.complaint?.text || 'Complaint details'}</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge>{complaint.complaint?.category || 'General'}</Badge>
+                <Badge variant="high">{complaint.complaint?.status || 'pending'}</Badge>
+              </div>
+            </div>
+            <Badge variant="active" style={{ fontSize: 12, padding: '6px 14px', flexShrink: 0 }}>{complaint.complaint?.status?.toUpperCase() || 'PENDING'}</Badge>
+          </div>
+        </GlassCard>
+      )}
 
       {/* Header Card */}
       <GlassCard layer={2} hoverEffect={true} className="track-header-card">
@@ -105,7 +172,7 @@ export function TrackComplaint() {
           <div className="section-label">Complaint Timeline</div>
 
           <div className="timeline">
-            {timeline.map((item, index) => (
+            {timelineData.map((item, index) => (
               <div key={index} className={`timeline-item ${item.active ? 'active' : ''} ${item.done ? 'done' : ''}`}>
                 <div className="timeline-left">
                   <div className="timeline-icon">

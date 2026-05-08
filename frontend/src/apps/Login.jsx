@@ -22,7 +22,11 @@ export function Login() {
     const result = await login(mobile, password);
     setLoading(false);
     if (result.success) {
-      navigate('/citizen');
+      if (result.role === 'officer' || result.role === 'senior_officer' || result.role === 'admin') {
+        navigate(result.jurisdiction_assigned ? '/officer' : '/officer/setup-location');
+      } else {
+        navigate('/citizen');
+      }
     } else {
       alert(result.error || "Login failed. Please check your credentials.");
     }

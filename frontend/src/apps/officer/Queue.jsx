@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { TrendingUp, TrendingDown, AlertTriangle, Clock } from 'lucide-react';
+import { getAssignedComplaints } from '../../services/api';
 
 const queueComplaints = [
   { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44',    cat: 'Roads',          dept: 'PWD',    citizen: 'Rahul Sharma',  priority: 'high',   slaHours: 0.25, status: 'urgent',      critical: true },
@@ -28,6 +29,22 @@ function SLATimer({ hours }) {
 
 export function Queue() {
   const [activeFilter, setActiveFilter] = useState(0);
+  const [items, setItems] = useState(queueComplaints);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const response = await getAssignedComplaints();
+        if (response?.grievances?.length) {
+          setItems(response.grievances);
+        }
+      } catch {
+        // keep static fallback
+      }
+    };
+
+    load();
+  }, []);
 
   return (
     <div className="animate-fade-in">
@@ -42,7 +59,7 @@ export function Queue() {
 
       {/* Queue */}
       <div style={{ maxWidth: 800 }}>
-        {queueComplaints.map(c => (
+        {items.map(c => (
           <GlassCard layer={2} hoverEffect={true} key={c.id} className={`queue-card ${c.critical ? 'critical' : ''}`} style={{
             borderLeft: `4px solid ${c.priority === 'high' ? 'var(--status-high)' : c.priority === 'medium' ? 'var(--status-med)' : 'var(--status-low)'}`,
           }}>

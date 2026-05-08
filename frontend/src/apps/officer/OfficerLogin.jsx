@@ -14,9 +14,16 @@ export function OfficerLogin() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 900));
-    login('officer');
-    navigate('/officer');
+    const identifier = e.target.querySelector('input[type="text"]').value;
+    const passwordFields = e.target.querySelectorAll('input[type="password"], input[type="text"]');
+    const password = passwordFields[1]?.value || '';
+    const result = await login(identifier, password);
+    setLoading(false);
+    if (result.success) {
+      navigate(result.jurisdiction_assigned ? '/officer' : '/officer/setup-location');
+    } else {
+      alert(result.error || 'Officer login failed.');
+    }
   };
 
   return (
@@ -48,11 +55,11 @@ export function OfficerLogin() {
         <form onSubmit={handleLogin} className="login-form">
 
           <div className="login-input-group">
-            <label>Email / Officer ID</label>
+            <label>Badge Number or Email</label>
             <div className="login-field">
               <input
                 type="text"
-                placeholder="officer.id@jansetu.gov.in"
+                placeholder="BADGE-1001 or officer.id@jansetu.gov.in"
                 className="login-input"
               />
             </div>

@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     MONGO_URI: str
     REDIS_URL: str
     SECRET_KEY: str
+    JWT_SECRET: str = ""
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 

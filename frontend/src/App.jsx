@@ -15,6 +15,7 @@ import { Analytics } from './apps/officer/Analytics';
 import { Escalations } from './apps/officer/Escalations';
 import { OfficerProfile } from './apps/officer/OfficerProfile';
 import { OfficerLogin } from './apps/officer/OfficerLogin';
+import { OfficerJurisdictionSetup } from './apps/officer/OfficerJurisdictionSetup';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
           <Route path="/" element={<Navigate to="/officer/login" replace />} />
           <Route path="/login" element={<Navigate to="/officer/login" replace />} />
           <Route path="/officer/login" element={<OfficerLogin />} />
+          <Route path="/officer/setup-location" element={<ProtectedRoute role="officer"><OfficerJurisdictionSetup /></ProtectedRoute>} />
           <Route path="/officer" element={<ProtectedRoute role="officer"><OfficerLayout /></ProtectedRoute>}>
             <Route index element={<OfficerDashboard />} />
             <Route path="queue" element={<Queue />} />
@@ -56,6 +58,7 @@ function App() {
         
         {/* Local Dev Access to Officer App fallback if not using subdomains */}
         <Route path="/officer/login" element={<OfficerLogin />} />
+        <Route path="/officer/setup-location" element={<ProtectedRoute role="officer"><OfficerJurisdictionSetup /></ProtectedRoute>} />
         <Route path="/officer" element={<ProtectedRoute role="officer"><OfficerLayout /></ProtectedRoute>}>
           <Route index element={<OfficerDashboard />} />
           <Route path="queue" element={<Queue />} />

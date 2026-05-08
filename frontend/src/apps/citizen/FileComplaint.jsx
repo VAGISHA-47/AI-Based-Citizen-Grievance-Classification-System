@@ -65,18 +65,18 @@ export function FileComplaint() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append("title", selectedCategory || "General Complaint");
-      formData.append("description", text);
-      formData.append("citizen_name", "Citizen");
-      formData.append("citizen_phone", "+910000000000");
-      formData.append("lat", gps?.lat ?? 19.076);
-      formData.append("lng", gps?.lng ?? 72.877);
-
       const { submitGrievance } = await import('../../services/api');
-      const response = await submitGrievance(formData);
+      const response = await submitGrievance({
+        text,
+        language: lang,
+        lat: gps?.lat ?? 19.076,
+        lng: gps?.lng ?? 72.877,
+        address: gps?.address || 'Mumbai, Maharashtra (default)',
+        media_urls: [],
+        category: selectedCategory || 'General Complaint',
+      });
 
-      setTrackingToken(response.grievance_id || "#CMP-0000");
+      setTrackingToken(response.complaint_id || response.tracking_token || "#CMP-0000");
       setSubmitting(false);
       setSubmitted(true);
     } catch (err) {
