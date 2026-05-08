@@ -1,42 +1,55 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import fs from 'fs'
 import path from 'path'
 
-// Determine which app to build (citizen or officer)
-// Usage: npm run dev:citizen or npm run dev:officer
-// Environment variable: VITE_APP_TYPE (defaults to 'citizen')
-const appType = process.env.VITE_APP_TYPE || 'citizen'
-const entryFile = appType === 'officer' ? 'index-officer.html' : 'index-citizen.html'
-
-console.log(`🎯 Building ${appType.toUpperCase()} frontend...`)
+// Custom Vite plugin to serve the correct HTML in dev mode
+function serveCorrectHtmlPlugin() {
+  return {
+    name: 'serve-citizen-html',
+    configureServer(server) {
+      return () => {
+        server.middlewares.use((req, res, next) => {
+          // Serve correct HTML for dev mode
+          if (req.url === '/' || req.url === '/index.html') {
+            const filePath = path.resolve(__dirname, 'index-citizen.html')
+            const content = fs.readFileSync(filePath, 'utf-8')
+            res.setHeader('Content-Type', 'text/html')
+            console.log('🟢 CITIZEN: Serving index-citizen.html')
+            return res.end(content)
+          }
+          next()
+        })
+      }
+    },
+  }
+}
 
 export default defineConfig({
   root: process.cwd(),
   
-  // Use different entry points for citizen vs officer
   build: {
     rollupOptions: {
-      input: path.resolve(__dirname, entryFile),
+      input: 'index-citizen.html',
     },
   },
 
   plugins: [
+    serveCorrectHtmlPlugin(),
     react(),
 
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: false,          // manual per-domain registration
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/*.svg'],
 
       manifest: {
-        name: appType === 'officer' ? 'JanSetu Officer' : 'JanSetu',
-        short_name: appType === 'officer' ? 'JanSetu Officer' : 'JanSetu',
-        description: appType === 'officer' 
-          ? 'Smart AI-powered civic grievance management dashboard for authorities'
-          : 'Smart AI-powered civic grievance system for India',
-        theme_color: appType === 'officer' ? '#7C3AED' : '#009DC4',
-        background_color: appType === 'officer' ? '#F5F3FF' : '#E1F5FE',
+        name: 'JanSetu',
+        short_name: 'JanSetu',
+        description: 'Smart AI-powered civic grievance system for India',
+        theme_color: '#009DC4',
+        background_color: '#E1F5FE',
         display: 'standalone',
         orientation: 'portrait-primary',
         start_url: '/',
@@ -78,13 +91,12 @@ export default defineConfig({
     }),
   ],
 
-  // Force Vite to properly pre-bundle react-countup (fixes CJS/ESM interop crash)
   optimizeDeps: {
     include: ['react-countup'],
   },
 
   server: {
-    port: appType === 'officer' ? 5175 : 5174,
+    port: 5174,
     strictPort: false,
     host: '0.0.0.0',
   },

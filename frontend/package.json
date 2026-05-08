@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:citizen": "vite --config vite.citizen.config.js",
+    "dev:officer": "vite --config vite.officer.config.js",
+    "dev:both": "npm run dev:citizen & npm run dev:officer",
     "build": "vite build",
+    "build:citizen": "vite build --config vite.citizen.config.js",
+    "build:officer": "vite build --config vite.officer.config.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
