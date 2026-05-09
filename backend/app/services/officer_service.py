@@ -38,44 +38,25 @@ def build_officer_summary_response() -> dict:
 
 
 async def assign_least_loaded_officer(category: str, ward: str) -> str:
-    """
-    Assign the least-loaded officer from the category's officer pool.
-    
-    Queries MongoDB to find which officer in the category has the fewest
-    open grievances (status='routed' or 'pending'). Returns that officer_id.
-    If MongoDB is unavailable, returns the first officer in the pool as fallback.
-    
-    Args:
-        category: Complaint category (e.g., "Water Supply", "Roads")
-        ward: Ward name (included for context, not used in current logic)
-    
-    Returns:
-        str: Officer ID with the lowest current load
-    """
-    # Get the list of officers for this category
+    from app.db.supabase_client import supabase
+
     officers = DEPT_OFFICERS.get(category, ["officer_general"])
-    
+
+    min_load = float("inf")
+    selected = officers[0]
+
     try:
-        from app.db.mongo import grievances_collection
-        
-        # Query MongoDB for each officer to find their current load
-        officer_loads = {}
         for officer_id in officers:
-            count = await grievances_collection.count_documents({
-                "assigned_officer": officer_id,
-                "status": {"$in": ["routed", "pending"]}
-            })
-            officer_loads[officer_id] = count
-        
-        # Return the officer with the minimum load
-        least_loaded = min(officer_loads, key=officer_loads.get)
-        logger.info(f"Assigned officer {least_loaded} for category '{category}' (load: {officer_loads[least_loaded]})")
-        return least_loaded
-    
+            result = supabase.table("complaints").select(
+                "complaint_id", count="exact"
+            ).eq("officer_id", officer_id).in_(
+                "status", ["assigned", "in_progress"]
+            ).execute()
+            count = result.count or 0
+            if count < min_load:
+                min_load = count
+                selected = officer_id
     except Exception as e:
-        logger.warning(
-            f"MongoDB query failed for officer assignment: {str(e)}. "
-            f"Falling back to first officer in pool."
-        )
-        # Fallback: return the first officer in the list
-        return officers[0]
+        print(f"[OFFICER] Supabase query failed: {e}")
+
+    return selected

@@ -1,7 +1,6 @@
 """Main routing pipeline that processes classified grievances end-to-end."""
 
 from datetime import datetime
-from bson import ObjectId
 
 
 async def run_routing_engine(grievance_id: str, data: dict) -> dict:
@@ -15,14 +14,14 @@ async def run_routing_engine(grievance_id: str, data: dict) -> dict:
     - SLA calculation
     - Officer assignment
     - Packet assembly
-    - MongoDB persistence
+    - Supabase persistence
     - WebSocket dispatch to officer
     - SMS notification to citizen
     
     Each step is wrapped in try/except so failures don't block subsequent steps.
     
     Args:
-        grievance_id: MongoDB ObjectId string
+        grievance_id: UUID string from Supabase
         data: Grievance data dict with keys:
             - description, category, priority, sentiment
             - citizen_name, citizen_phone
@@ -118,18 +117,25 @@ async def run_routing_engine(grievance_id: str, data: dict) -> dict:
         print(f"  ✗ Failed to assemble packet: {str(e)}")
         packet = {"error": str(e), "grievance_id": grievance_id}
     
-    # Step 6 — Save to MongoDB
-    print("[STEP 6] Persisting to MongoDB...")
+    # Step 6 — Save to Supabase
+    print("[STEP 6] Persisting to Supabase...")
     try:
-        from app.db.mongo import grievances_collection
+        from app.db.supabase_client import supabase
         
-        await grievances_collection.update_one(
-            {"_id": ObjectId(grievance_id)},
-            {"$set": packet}
-        )
-        print(f"  ✓ Saved to MongoDB")
+        supabase.table("complaints").update({
+            "tracking_token": packet["tracking_token"],
+            "category": packet["complaint"]["category"],
+            "priority": packet["complaint"]["priority"],
+            "status": "assigned",
+            "sla_days": packet["sla_days"],
+            "sla_deadline": packet["sla_deadline"],
+            "auth_score": packet["auth_score"],
+            "officer_id": packet["assigned_officer"],
+            "sentiment": packet["complaint"]["sentiment"],
+        }).eq("complaint_id", grievance_id).execute()
+        print(f"  ✓ Complaint {grievance_id} updated in Supabase")
     except Exception as e:
-        print(f"  ✗ Failed to save to MongoDB: {str(e)}")
+        print(f"  ✗ Failed to save to Supabase: {str(e)}")
     
     # Step 7 — WebSocket dispatch to officer
     print("[STEP 7] Dispatching to officer via WebSocket...")
@@ -183,8 +189,8 @@ if __name__ == "__main__":
             "auth_score": 75.0
         }
         
-        # Use a fake ObjectId-like string
-        result = await run_routing_engine("507f1f77bcf86cd799439011", mock_data)
+        # Use a test UUID string
+        result = await run_routing_engine("550e8400-e29b-41d4-a716-446655440000", mock_data)
         
         print("\n=== Final Packet ===")
         import json

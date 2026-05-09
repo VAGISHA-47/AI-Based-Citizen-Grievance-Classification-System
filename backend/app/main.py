@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import user_routes, authority_routes, auth, grievances, officer, ws
+from app.api.locations import router as locations_router
+from app.db.supabase_client import ping_supabase
 
 
 # Initialize FastAPI app with Phase 2 metadata
@@ -28,6 +30,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Test Supabase connection on startup."""
+    await ping_supabase()
 
 
 @app.get("/")
@@ -62,6 +70,9 @@ app.include_router(grievances.router)
 # Officer dashboard and websocket integration (Phase 8)
 app.include_router(officer.router)
 app.include_router(ws.router)
+
+# Location routes
+app.include_router(locations_router)
 
 
 if __name__ == "__main__":

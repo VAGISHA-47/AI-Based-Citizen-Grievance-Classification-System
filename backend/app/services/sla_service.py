@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 BASE_SLA_DAYS = {
@@ -33,7 +33,7 @@ def calculate_sla(category: str, priority: str) -> float:
 def calculate_sla_deadline(category: str, priority: str) -> datetime:
     """Return UTC deadline by adding the SLA days to the current UTC time."""
     sla_days = calculate_sla(category, priority)
-    return datetime.utcnow() + timedelta(days=sla_days)
+    return datetime.now(timezone.utc) + timedelta(days=sla_days)
 
 
 if __name__ == "__main__":

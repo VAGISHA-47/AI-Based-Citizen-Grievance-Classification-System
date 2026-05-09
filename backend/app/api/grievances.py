@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
-from datetime import datetime
 
 from app.services.routing_engine import run_routing_engine
 
@@ -16,32 +15,25 @@ async def submit_grievance(
     lng: float = Form(...),
     citizen_name: str = Form(...),
     citizen_phone: str = Form(...),
+    address: str = Form(""),
     file: UploadFile | None = File(None),
     background_tasks: BackgroundTasks = None,
 ):
     """Submit a citizen grievance and route it through the processing pipeline."""
     try:
-        # Save grievance to MongoDB
-        from app.db.mongo import grievances_collection
-        
-        grievance_doc = {
-            "title": title,
-            "description": description,
-            "channel": channel,
-            "citizen_name": citizen_name,
-            "citizen_phone": citizen_phone,
-            "lat": lat,
-            "lng": lng,
-            "file_name": file.filename if file else None,
+        from app.db.supabase_client import supabase
+
+        result = supabase.table("complaints").insert({
+            "text_original": description,
+            "lat": float(lat),
+            "lng": float(lng),
             "status": "submitted",
-            "created_at": datetime.utcnow().isoformat() + "Z",
-        }
-        
-        result = await grievances_collection.insert_one(grievance_doc)
-        grievance_id = str(result.inserted_id)
+        }).execute()
+
+        grievance_id = result.data[0]["complaint_id"]
     except Exception as e:
-        # Fallback if MongoDB unavailable
-        print(f"Warning: Failed to save to MongoDB: {str(e)}")
+        # Fallback if Supabase unavailable
+        print(f"Warning: Failed to save to Supabase: {str(e)}")
         grievance_id = "temp-grievance-id"
     
     # Queue the routing engine as a background task
@@ -72,23 +64,32 @@ async def submit_grievance(
 
 @router.get("/track/{token}")
 async def track_complaint(token: str):
-    from app.db.mongo import grievances_collection
+    from app.db.supabase_client import supabase
 
-    grievance = await grievances_collection.find_one({"tracking_token": token})
-    if not grievance:
+    result = supabase.table("complaints").select("*").eq("tracking_token", token).execute()
+    if not result.data:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    grievance["_id"] = str(grievance["_id"])
-    return grievance
+    return result.data[0]
 
 
 @router.get("/my")
 async def my_complaints():
-    # Placeholder - returns recent 10 for now
-    from app.db.mongo import grievances_collection
+    from app.db.supabase_client import supabase
 
-    results = await grievances_collection.find(
-        {}, {"_id": 1, "tracking_token": 1, "status": 1, "category": 1, "created_at": 1}
-    ).sort("created_at", -1).limit(10).to_list(10)
-    for r in results:
-        r["_id"] = str(r["_id"])
-    return results
+    result = supabase.table("complaints").select(
+        "complaint_id, tracking_token, status, category, created_at"
+    ).order("created_at", desc=True).limit(10).execute()
+    return result.data
+
+
+@router.get("/test/token")
+async def test_token():
+    from app.services.token_generator import generate_tracking_token
+    from app.services.sla_service import calculate_sla
+    from app.services.geo_mapper import get_ward_from_coordinates, get_zone_room
+
+    ward = get_ward_from_coordinates(19.12, 72.85)
+    token = generate_tracking_token("Water Supply", ward)
+    sla = calculate_sla("Water Supply", "HIGH")
+    zone = get_zone_room(ward)
+    return {"token": token, "ward": ward, "zone": zone, "sla_days": sla}
