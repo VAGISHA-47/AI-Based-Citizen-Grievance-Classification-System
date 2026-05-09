@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
 import CountUpBase from 'react-countup';
@@ -97,8 +97,31 @@ const departments = [
 const rankColor = (r) => r === 1 ? '#D4AF37' : r === 2 ? '#B8B8B8' : r === 3 ? '#CD7F32' : 'var(--color-text-secondary)';
 
 export function Analytics() {
+  const [analyticsData, setAnalyticsData] = useState([]);
+
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        const { getAnalytics } = await import('../../services/api');
+        const data = await getAnalytics();
+        setAnalyticsData(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load analytics:', err);
+      }
+    };
+    loadAnalytics();
+  }, []);
+
   return (
     <div className="animate-fade-in">
+
+      {analyticsData.length > 0 && (
+        <GlassCard layer={1} style={{ padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            Live analytics records loaded: {analyticsData.length}
+          </div>
+        </GlassCard>
+      )}
 
       {/* Auth Engine KPIs */}
       <div className="kpi-grid" style={{ marginBottom: 24 }}>

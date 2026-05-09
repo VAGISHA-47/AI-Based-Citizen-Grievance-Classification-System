@@ -7,8 +7,8 @@ import { Button } from '../components/ui/Button';
 import './Login.css';
 
 export function Login() {
+  const { login, register } = useAuthStore();
   const navigate = useNavigate();
-  const login = useAuthStore((state) => state.login);
   const [activeTab, setActiveTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -16,10 +16,38 @@ export function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    const phone = e.target.querySelector('input[type="tel"]')?.value
+      || e.target.querySelector('input[name="phone"]')?.value;
+    const password = e.target.querySelector('input[type="password"]')?.value;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    login('citizen');
-    navigate('/citizen');
+    const result = await login(phone, password);
+    setLoading(false);
+    if (result.success) {
+      if (result.role === 'officer' || result.role === 'admin') {
+        navigate('/officer');
+      } else {
+        navigate('/citizen');
+      }
+    } else {
+      alert(result.error || 'Login failed. Please check your credentials.');
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    const name = e.target.querySelector('input[name="name"]')?.value
+      || e.target.querySelectorAll('input')[0]?.value;
+    const phone = e.target.querySelector('input[type="tel"]')?.value
+      || e.target.querySelector('input[name="phone"]')?.value;
+    const password = e.target.querySelector('input[type="password"]')?.value;
+    setLoading(true);
+    const result = await register(name, phone, password);
+    setLoading(false);
+    if (result.success) {
+      alert('Account created! Please login.');
+    } else {
+      alert(result.error || 'Registration failed.');
+    }
   };
 
   return (
@@ -111,11 +139,11 @@ export function Login() {
 
         {/* Sign Up Form */}
         {activeTab === 'signup' && (
-          <form className="login-form" onSubmit={handleLogin}>
+          <form className="login-form" onSubmit={handleSignup}>
             <div className="login-input-group">
               <label>Full Name</label>
               <div className="login-field">
-                <input type="text" className="login-input" placeholder="Rahul Sharma" style={{ paddingLeft: 14 }} />
+                <input name="name" type="text" className="login-input" placeholder="Rahul Sharma" style={{ paddingLeft: 14 }} />
               </div>
             </div>
 

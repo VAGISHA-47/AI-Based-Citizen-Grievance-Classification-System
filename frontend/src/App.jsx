@@ -30,6 +30,7 @@ function App() {
           <Route path="/officer/login" element={<OfficerLogin />} />
           <Route path="/officer" element={<ProtectedRoute role="officer"><OfficerLayout /></ProtectedRoute>}>
             <Route index element={<OfficerDashboard />} />
+            <Route path="dashboard" element={<OfficerDashboard />} />
             <Route path="queue" element={<Queue />} />
             <Route path="escalations" element={<Escalations />} />
             <Route path="analytics" element={<Analytics />} />
@@ -58,6 +59,7 @@ function App() {
         <Route path="/officer/login" element={<OfficerLogin />} />
         <Route path="/officer" element={<ProtectedRoute role="officer"><OfficerLayout /></ProtectedRoute>}>
           <Route index element={<OfficerDashboard />} />
+          <Route path="dashboard" element={<OfficerDashboard />} />
           <Route path="queue" element={<Queue />} />
           <Route path="escalations" element={<Escalations />} />
           <Route path="analytics" element={<Analytics />} />

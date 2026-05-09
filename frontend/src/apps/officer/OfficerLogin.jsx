@@ -1,22 +1,42 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
 import { Eye, EyeOff, Lock, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '../../components/ui/Button';
 
 export function OfficerLogin() {
   const navigate = useNavigate();
-  const login = useAuthStore(s => s.login);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 900));
-    login('officer');
-    navigate('/officer');
+    setError('');
+    try {
+      const { loginUser } = await import('../../services/api');
+      const emailInput = e.target.querySelector('input[type="email"]')?.value
+        || e.target.querySelector('input[type="text"]')?.value
+        || e.target.querySelectorAll('input')[0]?.value;
+      const passwordInput = e.target.querySelector('input[type="password"]')?.value;
+
+      const data = await loginUser({ email: emailInput, password: passwordInput });
+
+      localStorage.setItem('jansetu_token', data.access_token);
+      localStorage.setItem('jansetu_role', data.role);
+      localStorage.setItem('jansetu_name', data.name || 'Officer');
+
+      if (data.role === 'officer' || data.role === 'admin') {
+        navigate('/officer/dashboard');
+      } else {
+        setError('Access denied. Officer credentials required.');
+      }
+    } catch (err) {
+      setError(err.message || 'Login failed. Check your credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,7 +71,7 @@ export function OfficerLogin() {
             <label>Email / Officer ID</label>
             <div className="login-field">
               <input
-                type="text"
+                type="email"
                 placeholder="officer.id@jansetu.gov.in"
                 className="login-input"
               />
@@ -80,6 +100,7 @@ export function OfficerLogin() {
           >
             {loading ? 'Authenticating…' : <><Lock size={16} /> Access Dashboard</>}
           </Button>
+          {error && <p style={{ color: 'red', marginTop: '8px', fontSize: '13px' }}>{error}</p>}
         </form>
 
         {/* Security note */}

@@ -63,25 +63,62 @@ function StarRating({ value, onChange }) {
 }
 
 export function TrackComplaint() {
+  const [tokenInput, setTokenInput] = useState('');
+  const [complaint, setComplaint] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [rating, setRating] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
 
+  const handleTrack = async (e) => {
+    e?.preventDefault();
+    if (!tokenInput.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const { trackComplaint } = await import('../../services/api');
+      const data = await trackComplaint(tokenInput.trim());
+      setComplaint(data);
+    } catch (err) {
+      setError('Complaint not found. Please check your tracking token.');
+      setComplaint(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="track-page animate-fade-in">
+
+      <GlassCard layer={2} className="track-header-card" style={{ marginBottom: 16 }}>
+        <form onSubmit={handleTrack} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <input
+            className="form-input"
+            placeholder="Enter tracking token"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <Button type="submit" variant="primary" disabled={loading}>
+            {loading ? 'Tracking...' : 'Track Complaint'}
+          </Button>
+        </form>
+        {error && <div style={{ marginTop: 10, color: 'var(--status-high)', fontSize: 13 }}>{error}</div>}
+      </GlassCard>
 
       {/* Header Card */}
       <GlassCard layer={2} hoverEffect={true} className="track-header-card">
         <div className="track-header-card__top">
           <div>
-            <div className="mono" style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>#CMP-8921</div>
-            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>Pothole on Main Street causing accidents</h2>
+            <div className="mono" style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{complaint?.tracking_token || '#CMP-8921'}</div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{complaint?.text_original || complaint?.title || 'Pothole on Main Street causing accidents'}</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Badge>Roads</Badge>
-              <Badge variant="high">High Priority</Badge>
-              <Badge style={{ background: 'rgba(0,201,167,0.1)', color: 'var(--teal-primary)', border: '1px solid rgba(0,201,167,0.2)' }}>PWD</Badge>
+              <Badge>{complaint?.category || 'Roads'}</Badge>
+              <Badge variant="high">{complaint?.priority || 'High Priority'}</Badge>
+              <Badge style={{ background: 'rgba(0,201,167,0.1)', color: 'var(--teal-primary)', border: '1px solid rgba(0,201,167,0.2)' }}>{complaint?.department || 'PWD'}</Badge>
             </div>
           </div>
-          <Badge variant="active" style={{ fontSize: 12, padding: '6px 14px', flexShrink: 0 }}>IN PROGRESS</Badge>
+          <Badge variant="active" style={{ fontSize: 12, padding: '6px 14px', flexShrink: 0 }}>{(complaint?.status || 'IN PROGRESS').toString().toUpperCase()}</Badge>
         </div>
 
         {/* Cluster Alert */}

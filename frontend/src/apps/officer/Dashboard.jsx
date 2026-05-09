@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
 import CountUpBase from 'react-countup';
 const CountUp = CountUpBase.default || CountUpBase;
 
-const complaints = [
+const fallbackComplaints = [
   { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44', cat: 'Roads', dept: 'PWD', citizen: 'Rahul Sharma', priority: 'high', slaHours: 0.25, status: 'urgent', critical: true },
   { id: '#CMP-8924', title: 'Streetlight not working near school zone', cat: 'Infrastructure', dept: 'BESCOM', citizen: 'Priya Nair', priority: 'medium', slaHours: 4.5, status: 'in_progress', critical: false },
   { id: '#CMP-8922', title: 'Water supply disruption in residential area', cat: 'Utilities', dept: 'BWSSB', citizen: 'Anil Desai', priority: 'high', slaHours: 8, status: 'assigned', critical: false },
@@ -53,6 +53,32 @@ const FILTERS = ['All (142)', 'High Priority (28)', 'SLA Warning (18)'];
 
 export function Dashboard() {
   const [activeFilter, setActiveFilter] = useState(0);
+  const [complaints, setComplaints] = useState([]);
+
+  useEffect(() => {
+    const loadComplaints = async () => {
+      try {
+        const { getAssignedComplaints } = await import('../../services/api');
+        const data = await getAssignedComplaints();
+        setComplaints(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load complaints:', err);
+      }
+    };
+    loadComplaints();
+  }, []);
+
+  const visibleComplaints = (complaints.length ? complaints : fallbackComplaints).map((c) => ({
+    id: c.id || (c.complaint_id ? `#${c.complaint_id}` : '#CMP-0000'),
+    title: c.title || c.text_original || 'Complaint',
+    cat: c.cat || c.category || 'General',
+    dept: c.dept || c.department || 'JanSetu',
+    citizen: c.citizen || c.citizen_name || 'Citizen',
+    priority: (c.priority || 'medium').toString().toLowerCase(),
+    slaHours: Number(c.slaHours ?? c.sla_hours ?? 24),
+    status: (c.status || 'assigned').toString().toLowerCase(),
+    critical: Boolean(c.critical || Number(c.slaHours ?? c.sla_hours ?? 24) < 1),
+  }));
 
   return (
     <div className="animate-fade-in">
@@ -101,7 +127,7 @@ export function Dashboard() {
           </div>
 
           {/* Queue Cards */}
-          {complaints.map(c => (
+          {visibleComplaints.map(c => (
             <GlassCard key={c.id} layer={2} className={`queue-card priority-border-${c.priority} ${c.critical ? 'critical' : ''}`}>
               {c.critical && <div className="active-badge">ACTIVE</div>}
               <PriorityBorder priority={c.priority} />

@@ -1,9 +1,14 @@
+from uuid import uuid4
+
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
 
 from app.services.routing_engine import run_routing_engine
+from app.services.geo_mapper import get_ward_from_coordinates
+from app.services.token_generator import generate_tracking_token
 
 
 router = APIRouter(prefix="/grievances", tags=["grievances"])
+TEMP_COMPLAINTS: dict[str, dict] = {}
 
 
 @router.post("/")
@@ -20,11 +25,16 @@ async def submit_grievance(
     background_tasks: BackgroundTasks = None,
 ):
     """Submit a citizen grievance and route it through the processing pipeline."""
+    ward = get_ward_from_coordinates(float(lat), float(lng))
+    tracking_token = generate_tracking_token(title or "General", ward)
+
     try:
         from app.db.supabase_client import supabase
 
         result = supabase.table("complaints").insert({
+            "tracking_token": tracking_token,
             "text_original": description,
+            "category": title,
             "lat": float(lat),
             "lng": float(lng),
             "status": "submitted",
@@ -34,7 +44,17 @@ async def submit_grievance(
     except Exception as e:
         # Fallback if Supabase unavailable
         print(f"Warning: Failed to save to Supabase: {str(e)}")
-        grievance_id = "temp-grievance-id"
+        grievance_id = f"temp-{uuid4()}"
+        TEMP_COMPLAINTS[tracking_token] = {
+            "complaint_id": grievance_id,
+            "tracking_token": tracking_token,
+            "title": title,
+            "text_original": description,
+            "category": title,
+            "status": "submitted",
+            "lat": float(lat),
+            "lng": float(lng),
+        }
     
     # Queue the routing engine as a background task
     if background_tasks is not None:
@@ -59,6 +79,7 @@ async def submit_grievance(
         "message": "Grievance submitted",
         "status": "processing",
         "grievance_id": grievance_id,
+        "tracking_token": tracking_token,
     }
 
 
@@ -67,9 +88,14 @@ async def track_complaint(token: str):
     from app.db.supabase_client import supabase
 
     result = supabase.table("complaints").select("*").eq("tracking_token", token).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    return result.data[0]
+    if result.data:
+        return result.data[0]
+
+    temp = TEMP_COMPLAINTS.get(token)
+    if temp:
+        return temp
+
+    raise HTTPException(status_code=404, detail="Complaint not found")
 
 
 @router.get("/my")
