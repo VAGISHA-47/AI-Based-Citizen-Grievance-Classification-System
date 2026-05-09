@@ -24,7 +24,12 @@ def create_access_token(data: Dict) -> str:
     from datetime import timezone
     expire = datetime.now(timezone.utc) + timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    secret_key = settings.JWT_SECRET or settings.SECRET_KEY
+    
+    # Safely get JWT_SECRET with fallback to SECRET_KEY
+    secret_key = getattr(settings, "JWT_SECRET", None) or getattr(settings, "SECRET_KEY", None)
+    if not secret_key:
+        raise ValueError("JWT_SECRET or SECRET_KEY must be configured in environment variables")
+    
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
@@ -32,7 +37,11 @@ def create_access_token(data: Dict) -> str:
 def verify_token(token: str) -> Optional[Dict]:
     """Decode and verify a JWT token. Return the payload or None if invalid."""
     try:
-        secret_key = settings.JWT_SECRET or settings.SECRET_KEY
+        # Safely get JWT_SECRET with fallback to SECRET_KEY
+        secret_key = getattr(settings, "JWT_SECRET", None) or getattr(settings, "SECRET_KEY", None)
+        if not secret_key:
+            return None
+        
         payload = jwt.decode(token, secret_key, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError:
