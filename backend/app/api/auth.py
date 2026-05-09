@@ -10,22 +10,46 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 @router.post("/register")
 async def register(payload: dict):
-    """Temporary registration endpoint accepting both email and phone payloads."""
-    name = payload.get("name", "User")
-    phone = payload.get("phone")
-    email = payload.get("email")
-    password = payload.get("password")
+    """Register a new user using phone or email. Persists to Supabase users table."""
+    from app.db.supabase_client import supabase
+    from app.utils.auth import hash_password
+
+    # Accept body as dict-like payload
+    email = payload.get("email") or payload.get("phone") or ""
+    phone = payload.get("phone") or ""
+    name = payload.get("name") or "Citizen"
+    password = payload.get("password", "")
 
     if not password or (not phone and not email):
         raise HTTPException(status_code=422, detail="phone/email and password are required")
 
-    return {
-        "message": "User registration endpoint ready",
-        "name": name,
+    # Check if user already exists by phone or email
+    existing = None
+    if phone:
+        existing = supabase.table("users").select("user_id").eq("phone", phone).execute()
+    if not existing or not existing.data:
+        if email:
+            existing = supabase.table("users").select("user_id").eq("email", email).execute()
+
+    if existing and existing.data:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    # Insert user row
+    result = supabase.table("users").insert({
         "phone": phone,
         "email": email,
-        "note": "Database persistence will be integrated later",
-    }
+        "name": name,
+        "password_hash": hash_password(password),
+        "role": "citizen",
+        "trust_score": 50,
+        "trust_level": "new",
+        "is_verified": False,
+    }).execute()
+
+    if not result or not result.data:
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+    return {"message": "User registered successfully", "user_id": str(result.data[0]["user_id"])}
 
 
 @router.post("/auth/login")
@@ -40,18 +64,18 @@ async def login(request: Request):
     from app.db.supabase_client import supabase
     from app.utils.auth import verify_password, create_access_token
 
-    # Search by email first, then phone
+    # Search by email first, then by phone (simple two-step lookup)
     result = supabase.table("users").select("*").eq("email", identifier).execute()
     if not result.data:
         result = supabase.table("users").select("*").eq("phone", identifier).execute()
-
     if not result.data:
         raise HTTPException(status_code=401, detail="User not found")
 
     user = result.data[0]
 
+    # Verify password; on failure, return generic message as well
     if not verify_password(password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user["email"] or user["phone"], "role": user["role"]})
 
