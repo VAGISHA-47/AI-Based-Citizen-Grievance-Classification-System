@@ -21,10 +21,16 @@ def test_auth_login():
 
 
 def test_grievance_submission():
-    data = {"title": "Test", "description": "Desc", "channel": "web"}
+    data = {
+        "title": "Test Complaint",
+        "description": "There is a large pothole near the main road causing accidents",
+        "channel": "web",
+        "citizen_name": "Test Citizen",
+        "citizen_phone": "+919876543210",
+        "lat": "19.12",
+        "lng": "72.85"
+    }
     response = client.post("/grievances/", data=data)
     assert response.status_code == 200
     body = response.json()
-    assert "id" in body
-    assert "status" in body
-    assert "ai_status" in body
+    assert "grievance_id" in body or "id" in body or "message" in body

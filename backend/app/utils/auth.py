@@ -21,7 +21,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_access_token(data: Dict) -> str:
     """Create a JWT access token with expiry from settings."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    from datetime import timezone
+    expire = datetime.now(timezone.utc) + timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     secret_key = settings.JWT_SECRET or settings.SECRET_KEY
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=settings.ALGORITHM)
