@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
@@ -18,7 +19,7 @@ const timeline = [
     state: 'AI Analysis Complete',
     date: 'Oct 14, 10:35 AM',
     done: true,
-    desc: 'Category: Road Safety · Priority: High · Auth Score: 87/100',
+    desc: 'Category: General · Priority: High · Auth Score: 87/100',
     icon: '🤖'
   },
   {
@@ -63,12 +64,35 @@ function StarRating({ value, onChange }) {
 }
 
 export function TrackComplaint() {
+  const location = useLocation();
   const [tokenInput, setTokenInput] = useState('');
   const [complaint, setComplaint] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rating, setRating] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tokenFromQuery = params.get('token') || localStorage.getItem('last_tracking_token') || '';
+    if (tokenFromQuery) {
+      setTokenInput(tokenFromQuery);
+      void (async () => {
+        setLoading(true);
+        setError('');
+        try {
+          const { trackComplaint } = await import('../../services/api');
+          const data = await trackComplaint(tokenFromQuery.trim());
+          setComplaint(data);
+        } catch (err) {
+          setError('Complaint not found. Please check your tracking token.');
+          setComplaint(null);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [location.search]);
 
   const handleTrack = async (e) => {
     e?.preventDefault();
@@ -113,7 +137,7 @@ export function TrackComplaint() {
             <div className="mono" style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{complaint?.tracking_token || '#CMP-8921'}</div>
             <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{complaint?.text_original || complaint?.title || 'Pothole on Main Street causing accidents'}</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Badge>{complaint?.category || 'Roads'}</Badge>
+              <Badge>{complaint?.category || complaint?.ai_analysis?.category || 'General'}</Badge>
               <Badge variant="high">{complaint?.priority || 'High Priority'}</Badge>
               <Badge style={{ background: 'rgba(0,201,167,0.1)', color: 'var(--teal-primary)', border: '1px solid rgba(0,201,167,0.2)' }}>{complaint?.department || 'PWD'}</Badge>
             </div>
@@ -178,12 +202,12 @@ export function TrackComplaint() {
           <GlassCard layer={1} className="track-side-card">
             <div className="section-label">AI Analysis</div>
             {[
-              ['Category',   <Badge>Road Safety</Badge>],
-              ['Priority',   <Badge variant="high">High</Badge>],
-              ['Sentiment',  <Badge variant="medium">Distressed</Badge>],
-              ['Auth Score', <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--teal-primary)' }}>87/100</span>],
-              ['Confidence', <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--status-low)' }}>94%</span>],
-              ['SLA Pred.',  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--status-low)' }}>~2.8 days</span>],
+              ['Category',   <Badge>{complaint?.category || complaint?.ai_analysis?.category || 'General'}</Badge>],
+              ['Priority',   <Badge variant="high">{complaint?.priority || complaint?.ai_analysis?.priority || 'High'}</Badge>],
+              ['Sentiment',  <Badge variant="medium">{complaint?.ai_analysis?.sentiment || 'Distressed'}</Badge>],
+              ['Auth Score', <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--teal-primary)' }}>{complaint?.ai_analysis?.auth_score ?? 87}/100</span>],
+              ['Confidence', <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--status-low)' }}>{complaint?.ai_analysis?.confidence ?? 94}%</span>],
+              ['SLA Pred.',  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--status-low)' }}>~{complaint?.ai_analysis?.sla_days ?? 2.8} days</span>],
             ].map(([label, val]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{label}</span>

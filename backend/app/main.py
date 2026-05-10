@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import user_routes, authority_routes, auth, grievances, officer, ws
+from app.api.complaints import router as complaints_router
 from app.api.locations import router as locations_router
 from app.db.supabase_client import ping_supabase
 
@@ -70,6 +71,7 @@ app.include_router(
 # Phase 5: Include auth and grievance route contracts (mock responses)
 app.include_router(auth.router)
 app.include_router(grievances.router)
+app.include_router(complaints_router)
 
 # Officer dashboard and websocket integration (Phase 8)
 app.include_router(officer.router)

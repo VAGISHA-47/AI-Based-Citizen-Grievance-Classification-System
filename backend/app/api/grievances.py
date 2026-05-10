@@ -1,18 +1,68 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException, Request
 
 from app.services.routing_engine import run_routing_engine
 from app.services.geo_mapper import get_ward_from_coordinates
 from app.services.token_generator import generate_tracking_token
+from app.utils.auth import verify_token
 
 
 router = APIRouter(prefix="/grievances", tags=["grievances"])
 TEMP_COMPLAINTS: dict[str, dict] = {}
+GUEST_PASSWORD_HASH = "$2b$12$n.z8fpfNHSmQZG6X4RckU.uwK843JqTDB7QSHcv2mzhMCRHypQHM2"
+
+
+def _resolve_user_id(auth_header: str | None, citizen_phone: str, citizen_name: str) -> str:
+    """Resolve a valid users.user_id for complaint persistence."""
+    from app.db.supabase_client import supabase
+
+    def _lookup_user(field: str, value: str) -> str | None:
+        if not value:
+            return None
+        result = supabase.table("users").select("user_id").eq(field, value).limit(1).execute()
+        if result.data:
+            return str(result.data[0]["user_id"])
+        return None
+
+    token = ""
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+
+    if token:
+        payload = verify_token(token)
+        if payload:
+            identifier = payload.get("sub") or ""
+            resolved = _lookup_user("email", identifier) or _lookup_user("phone", identifier)
+            if resolved:
+                return resolved
+
+    resolved = _lookup_user("phone", citizen_phone) or _lookup_user("email", citizen_phone)
+    if resolved:
+        return resolved
+
+    guest_phone = citizen_phone or "anonymous"
+    guest_name = citizen_name or "Citizen"
+    guest_result = supabase.table("users").insert({
+        "phone": guest_phone,
+        "email": f"{guest_phone}@guest.local" if guest_phone != "anonymous" else "anonymous@guest.local",
+        "name": guest_name,
+        "password_hash": GUEST_PASSWORD_HASH,
+        "role": "citizen",
+        "trust_score": 50,
+        "trust_level": "new",
+        "is_verified": False,
+    }).execute()
+
+    if guest_result.data:
+        return str(guest_result.data[0]["user_id"])
+
+    raise HTTPException(status_code=500, detail="Unable to resolve a user record for complaint submission")
 
 
 @router.post("/")
 async def submit_grievance(
+    request: Request,
     title: str = Form(...),
     description: str = Form(...),
     channel: str = Form("web"),
@@ -27,6 +77,7 @@ async def submit_grievance(
     """Submit a citizen grievance and route it through the processing pipeline."""
     ward = get_ward_from_coordinates(float(lat), float(lng))
     tracking_token = generate_tracking_token(title or "General", ward)
+    auth_header = request.headers.get("authorization")
 
     from app.services.ai_pipeline import classify_text, verify_image
     
@@ -66,8 +117,10 @@ async def submit_grievance(
 
     try:
         from app.db.supabase_client import supabase
+        user_id = _resolve_user_id(auth_header, citizen_phone, citizen_name)
 
         result = supabase.table("complaints").insert({
+            "user_id": user_id,
             "tracking_token": tracking_token,
             "text_original": description,
             "category": ai_result.get("category", "General"),
@@ -79,7 +132,17 @@ async def submit_grievance(
             "status": "submitted",
         }).execute()
 
-        grievance_id = result.data[0]["complaint_id"]
+        grievance_id = None
+        if result.data:
+            grievance_id = result.data[0].get("complaint_id") or result.data[0].get("id")
+
+        if not grievance_id:
+            lookup = supabase.table("complaints").select("complaint_id").eq("tracking_token", tracking_token).limit(1).execute()
+            if lookup.data:
+                grievance_id = lookup.data[0]["complaint_id"]
+
+        if not grievance_id:
+            raise RuntimeError("Complaint insert did not return a complaint_id")
     except Exception as e:
         # Fallback if Supabase unavailable
         print(f"Warning: Failed to save to Supabase: {str(e)}")

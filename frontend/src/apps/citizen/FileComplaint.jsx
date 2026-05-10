@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -28,11 +29,13 @@ const AUTH_SIGNALS = [
 ];
 
 export function FileComplaint() {
+  const navigate = useNavigate();
   const [step, setStep]             = useState(0);
   const [lang, setLang]             = useState('English');
   const [trackingToken, setTrackingToken] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [text, setText]             = useState('');
+  const [address, setAddress]       = useState('');
   const [wordCount, setWordCount]   = useState(0);
   const [gps, setGps]               = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -43,6 +46,7 @@ export function FileComplaint() {
   const [transcript, setTranscript] = useState("");
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const fileInputRef = useRef(null);
+  const complaintCategory = selectedCategory || 'General';
 
   useEffect(() => {
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0);
@@ -58,15 +62,18 @@ export function FileComplaint() {
             lng: pos.coords.longitude,
             address: 'Location captured from GPS',
           });
+          setAddress('Location captured from GPS');
           setGpsLoading(false);
         },
         () => {
           setGps({ lat: 19.076, lng: 72.877, address: 'Mumbai (default)' });
+          setAddress('Mumbai (default)');
           setGpsLoading(false);
         }
       );
     } else {
       setGps({ lat: 19.076, lng: 72.877, address: 'Mumbai (default)' });
+      setAddress('Mumbai (default)');
       setGpsLoading(false);
     }
   };
@@ -138,22 +145,27 @@ export function FileComplaint() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('title', selectedCategory || 'General Complaint');
-      formData.append('description', text || 'No description provided');
-      formData.append('citizen_name', 'Citizen');
-      formData.append('citizen_phone', '+910000000000');
-      formData.append('lat', gps?.lat ?? 19.076);
-      formData.append('lng', gps?.lng ?? 72.877);
-      if (mediaFile) formData.append('file', mediaFile);
+      const { submitComplaint } = await import('../../services/api');
+      const response = await submitComplaint({
+        text: text || 'No description provided',
+        language: lang,
+        lat: gps?.lat ?? 19.076,
+        lng: gps?.lng ?? 72.877,
+        address: address || gps?.address || 'Location not captured',
+        media_urls: [],
+        category: complaintCategory,
+      });
 
-      const { submitGrievance } = await import('../../services/api');
-      const response = await submitGrievance(formData);
+      const generatedToken = response.tracking_token || response.trackingToken;
+      if (!generatedToken) {
+        throw new Error(response?.detail || 'Backend did not return a tracking token');
+      }
 
-      setTrackingToken(response.tracking_token || response.grievance_id || 'SUBMITTED');
+      setTrackingToken(generatedToken);
+      localStorage.setItem('last_tracking_token', generatedToken);
       setSubmitted(true);
     } catch (err) {
-      alert('Submission failed. Please try again.');
+      alert(err?.message || 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -179,10 +191,12 @@ export function FileComplaint() {
               <span>📱</span> SMS confirmation sent to +91 98765 43210
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'center' }}>
-              <Button variant="primary" onClick={() => { setSubmitted(false); setStep(0); setText(''); setGps(null); setTrackingToken(''); setMediaFile(null); }}>
+              <Button variant="primary" onClick={() => { setSubmitted(false); setStep(0); setText(''); setGps(null); setTrackingToken(''); setMediaFile(null); setSelectedCategory(''); setAddress(''); }}>
                 File Another
               </Button>
-              <Button variant="outline">Track This Complaint</Button>
+              <Button variant="outline" onClick={() => navigate(`/citizen/track?token=${encodeURIComponent(trackingToken)}`)}>
+                Track This Complaint
+              </Button>
             </div>
           </div>
         </GlassCard>
@@ -239,7 +253,7 @@ export function FileComplaint() {
               </div>
               <div className="ai-preview-card__row">
                 <span className="ai-preview-card__label">Category</span>
-                <Badge>Road Safety</Badge>
+                <Badge>{complaintCategory}</Badge>
               </div>
               <div className="ai-preview-card__row">
                 <span className="ai-preview-card__label">Priority</span>
@@ -301,7 +315,12 @@ export function FileComplaint() {
 
           <div className="form-group">
             <label className="form-label">Manual Address (optional)</label>
-            <input className="form-input" placeholder="Street, Area, City" defaultValue={gps?.address || ''} />
+            <input
+              className="form-input"
+              placeholder="Street, Area, City"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
           </div>
 
           {/* Upload Zone */}
@@ -396,7 +415,7 @@ export function FileComplaint() {
             borderRadius: 14, padding: 16, marginBottom: 20
           }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <Badge>Road Safety</Badge>
+              <Badge>{complaintCategory}</Badge>
               <Badge variant="high">High</Badge>
               <Badge variant="active">{lang}</Badge>
               {gps && (

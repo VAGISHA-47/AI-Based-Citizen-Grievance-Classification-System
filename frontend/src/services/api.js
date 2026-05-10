@@ -30,15 +30,16 @@ export const getAreas = (district_id) => apiRequest(`/api/v1/locations/areas?dis
 export const getWards = (area_id) => apiRequest(`/api/v1/locations/wards?area_id=${area_id}`);
 
 // COMPLAINTS / GRIEVANCES
-export const submitGrievance = (formData) =>
-  fetch(BASE_URL + "/grievances/", {
+export const submitComplaint = (payload) =>
+  apiRequest("/api/v1/complaints", {
     method: "POST",
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: formData,
-  }).then((r) => r.json());
+    body: JSON.stringify(payload),
+  });
+
+export const submitGrievance = submitComplaint;
 
 export const trackComplaint = (token) =>
-  apiRequest(`/grievances/track/${token}`);
+  apiRequest(`/api/v1/complaints/${token}`);
 
 export const getMyComplaints = () => apiRequest("/grievances/my");
 
