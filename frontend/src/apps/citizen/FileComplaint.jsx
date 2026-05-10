@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -39,6 +39,10 @@ export function FileComplaint() {
   const [submitted, setSubmitted]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0);
@@ -64,6 +68,70 @@ export function FileComplaint() {
     } else {
       setGps({ lat: 19.076, lng: 72.877, address: 'Mumbai (default)' });
       setGpsLoading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Your browser does not support audio recording. Please use Chrome, Firefox, or Edge.");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        stream.getTracks().forEach(t => t.stop());
+        setIsRecording(false);
+        
+        console.log("[VOICE] Recording stopped, sending to backend...");
+        
+        // Send to backend Whisper for transcription
+        try {
+          const formData = new FormData();
+          formData.append("file", blob, "voice_note.webm");
+          const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+          const res = await fetch(`${apiUrl}/grievances/test/transcribe-audio`, {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          console.log("[VOICE] Response:", data);
+          if (data.transcript) {
+            setTranscript(data.transcript);
+          } else if (data.error) {
+            console.error("[VOICE] Error:", data.error);
+            setTranscript("Could not transcribe. Please type manually.");
+          }
+        } catch (err) {
+          console.error("[VOICE] Fetch failed:", err);
+          setTranscript("Transcription failed. Please type manually.");
+        }
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      console.log("[VOICE] Recording started...");
+    } catch (err) {
+      console.error("[VOICE] Mic error:", err);
+      if (err.name === "NotAllowedError") {
+        alert("Microphone access denied. Please click the lock icon in your browser address bar and allow microphone access.");
+      } else if (err.name === "NotFoundError") {
+        alert("No microphone found. Please connect a microphone.");
+      } else {
+        alert("Could not start recording: " + err.message);
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      console.log("[VOICE] Stopping recording...");
     }
   };
 
@@ -237,21 +305,76 @@ export function FileComplaint() {
           </div>
 
           {/* Upload Zone */}
-          <div className="upload-zone">
+          <div 
+            className="upload-zone"
+            onClick={() => fileInputRef.current?.click()}
+            style={{ position: 'relative', overflow: 'hidden' }}
+          >
             <div className="upload-zone__icon"><Upload size={22} /></div>
             <div className="upload-zone__title">Attach Evidence</div>
             <div className="upload-zone__sub">Drop photos or videos · JPG, PNG, MP4 · Max 50 MB</div>
+            {mediaFile && (
+              <div style={{ fontSize: '12px', color: 'var(--teal-primary)', marginTop: '8px' }}>
+                ✓ {mediaFile.name}
+              </div>
+            )}
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*,video/*"
-              onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
-              style={{ marginTop: 12 }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setMediaFile(file);
+                  console.log("[FILE] Selected:", file.name, file.type, file.size);
+                }
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                opacity: 0,
+                width: '100%',
+                height: '100%',
+                cursor: 'pointer',
+                zIndex: 10,
+              }}
             />
           </div>
 
-          <Button variant="outline" style={{ width: '100%' }}>
-            <Mic size={16} /> Record Voice Note
-          </Button>
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            style={{
+              background: isRecording ? "#e53e3e" : "transparent",
+              color: isRecording ? "#fff" : "inherit",
+              border: "1px solid currentColor",
+              borderRadius: "8px",
+              padding: "12px 20px",
+              cursor: "pointer",
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              fontSize: "14px"
+            }}
+          >
+            {isRecording ? "⏹ Stop Recording..." : "🎤 Record Voice Note"}
+          </button>
+
+          {transcript && (
+            <div style={{
+              marginTop: "8px",
+              padding: "10px",
+              background: "rgba(255,255,255,0.05)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              color: "#9effd4"
+            }}>
+              <strong>Transcript:</strong> {transcript}
+            </div>
+          )}
 
           <div className="step-nav">
             <Button variant="outline" onClick={() => setStep(0)}>← Back</Button>

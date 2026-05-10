@@ -1,16 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { TrendingUp, TrendingDown, AlertTriangle, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 
-const queueComplaints = [
-  { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44',    cat: 'Roads',          dept: 'PWD',    citizen: 'Rahul Sharma',  priority: 'high',   slaHours: 0.25, status: 'urgent',      critical: true },
-  { id: '#CMP-8924', title: 'Streetlight not working near school zone',       cat: 'Infrastructure', dept: 'BESCOM', citizen: 'Priya Nair',    priority: 'medium', slaHours: 4.5,  status: 'in_progress', critical: false },
-  { id: '#CMP-8923', title: 'Water supply disruption in Koramangala',         cat: 'Utilities',      dept: 'BWSSB',  citizen: 'Anil Desai',    priority: 'high',   slaHours: 8,    status: 'assigned',    critical: false },
-  { id: '#CMP-8922', title: 'Garbage not collected for 3 consecutive days',   cat: 'Sanitation',     dept: 'BBMP',   citizen: 'Suresh Rao',    priority: 'low',    slaHours: 22,   status: 'submitted',   critical: false },
-  { id: '#CMP-8921', title: 'Park bench broken in Cubbon Park',               cat: 'Parks',          dept: 'BBMP',   citizen: 'Meera Pillai',  priority: 'low',    slaHours: 40,   status: 'submitted',   critical: false },
-  { id: '#CMP-8920', title: 'Sewer line overflow near bus stop',              cat: 'Sanitation',     dept: 'BWSSB',  citizen: 'Vikram Singh',  priority: 'high',   slaHours: 2,    status: 'in_progress', critical: false },
+// Fallback complaints (shown while loading or if API fails)
+const DEFAULT_QUEUE = [
+  { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44',    cat: 'Roads',          dept: 'PWD',    citizen: 'Rahul Sharma',  priority: 'high',   slaHours: 0.25, status: 'submitted',      critical: true },
 ];
 
 const FILTERS = ['All (142)', 'High Priority (28)', 'SLA Warning (18)'];
@@ -26,11 +22,74 @@ function SLATimer({ hours }) {
   return <span className={`mono queue-card__sla ${className}`} style={{ color, textShadow: hours < 1 ? '0 0 12px rgba(255, 77, 109, 0.4)' : 'none' }}>⏱ {label}</span>;
 }
 
+
 export function Queue() {
   const [activeFilter, setActiveFilter] = useState(0);
+  const [complaints, setComplaints] = useState(DEFAULT_QUEUE);
+  const [loading, setLoading] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  const fetchComplaints = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+      const response = await fetch(`${apiUrl}/grievances/queue`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      console.log("[QUEUE] Fetched complaints:", data);
+      if (Array.isArray(data) && data.length > 0) {
+        setComplaints(data);
+      }
+    } catch (err) {
+      console.error("[QUEUE] Failed to fetch:", err);
+    } finally {
+      setLoading(false);
+      setLastRefresh(new Date());
+    }
+  };
+
+  useEffect(() => {
+    // Fetch on mount
+    fetchComplaints();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchComplaints, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="animate-fade-in">
+      {/* Refresh Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Complaint Queue</h2>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+            Last updated: {lastRefresh.toLocaleTimeString()} · {complaints.length} active
+          </div>
+        </div>
+        <button
+          onClick={fetchComplaints}
+          disabled={loading}
+          style={{
+            background: 'rgba(0, 201, 167, 0.1)',
+            border: '1px solid rgba(0, 201, 167, 0.3)',
+            color: 'var(--teal-primary)',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
       {/* Filter Tabs */}
       <div className="filter-tabs">
         {FILTERS.map((f, i) => (
@@ -42,7 +101,14 @@ export function Queue() {
 
       {/* Queue */}
       <div style={{ maxWidth: 800 }}>
-        {queueComplaints.map(c => (
+        {complaints.length === 0 ? (
+          <GlassCard layer={2} style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              No complaints in queue right now.
+            </div>
+          </GlassCard>
+        ) : (
+          complaints.map(c => (
           <GlassCard layer={2} hoverEffect={true} key={c.id} className={`queue-card ${c.critical ? 'critical' : ''}`} style={{
             borderLeft: `4px solid ${c.priority === 'high' ? 'var(--status-high)' : c.priority === 'medium' ? 'var(--status-med)' : 'var(--status-low)'}`,
           }}>
@@ -83,7 +149,8 @@ export function Queue() {
               </div>
             </div>
           </GlassCard>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

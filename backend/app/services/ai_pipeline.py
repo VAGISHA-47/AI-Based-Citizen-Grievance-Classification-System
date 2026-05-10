@@ -1,9 +1,6 @@
 import pickle
 import os
 import io
-import torch
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 
 BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "ml")
 WEIGHTS_DIR = os.path.join(BASE_DIR, "weights")
@@ -33,6 +30,7 @@ def _load_pkl_models():
 def _load_clip():
     global _clip_model, _clip_processor
     try:
+        from transformers import CLIPProcessor, CLIPModel
         print("[AI] Loading CLIP model...")
         _clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
         _clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -67,6 +65,9 @@ def classify_text(text: str) -> dict:
 
 def verify_image(text: str, image_bytes: bytes) -> dict:
     try:
+        import torch
+        from PIL import Image
+        
         if _clip_model is None:
             return {"verified": True, "score": 0.0, "reason": "CLIP not loaded"}
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -90,9 +91,19 @@ def verify_image(text: str, image_bytes: bytes) -> dict:
 def transcribe_audio(audio_path: str) -> dict:
     try:
         import whisper
+        print(f"[WHISPER] Loading model for: {audio_path}")
         model = whisper.load_model("base")
         result = model.transcribe(audio_path, fp16=False)
-        return {"transcript": result["text"], "success": True}
+        transcript = result.get("text", "").strip()
+        print(f"[WHISPER] Transcript: {transcript}")
+        return {
+            "transcript": transcript,
+            "success": True
+        }
     except Exception as e:
-        print(f"[AI] transcribe error: {e}")
-        return {"transcript": "", "success": False}
+        print(f"[WHISPER] Error: {e}")
+        return {
+            "transcript": "",
+            "success": False,
+            "error": str(e)
+        }

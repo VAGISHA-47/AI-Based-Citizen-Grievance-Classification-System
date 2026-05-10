@@ -148,6 +148,43 @@ async def my_complaints():
     return result.data
 
 
+@router.get("/queue")
+async def queue_grievances(priority: str = None):
+    """Fetch grievances for officer queue with optional priority filter."""
+    from app.db.supabase_client import supabase
+    
+    try:
+        query = supabase.table("complaints").select(
+            "complaint_id, tracking_token, text_original, category, priority, status, created_at, lat, lng, sla_days, ai_confidence"
+        ).order("created_at", desc=True)
+        
+        if priority and priority.lower() != "all":
+            query = query.eq("priority", priority.lower())
+        
+        result = query.execute()
+        
+        # Format for officer queue UI
+        formatted = []
+        for item in result.data:
+            formatted.append({
+                "id": f"#CMP-{item['complaint_id'][-4:]}",
+                "title": item["text_original"][:80] if item["text_original"] else "Unknown Issue",
+                "cat": item["category"] or "General",
+                "dept": "BBMP",  # can be enriched by routing engine later
+                "citizen": "Citizen",  # can be added when auth is implemented
+                "priority": item["priority"] or "medium",
+                "slaHours": (item["sla_days"] or 5.0) * 24,
+                "status": item["status"] or "submitted",
+                "critical": (item["priority"] or "").lower() == "high",
+                "tracking_token": item["tracking_token"],
+            })
+        
+        return formatted
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch grievances: {str(e)}")
+        return []
+
+
 @router.get("/test/token")
 async def test_token():
     from app.services.token_generator import generate_tracking_token
@@ -181,3 +218,65 @@ async def test_duplicate(text: str = Form(...), category: str = Form(...)):
     from app.services.duplicate_service import check_duplicate
     result = check_duplicate(text, category)
     return {"input": text, "result": result}
+
+
+@router.post("/test/transcribe-audio")
+async def transcribe_audio_route(file: UploadFile = File(...)):
+    import tempfile
+    import os
+    import subprocess
+    from app.services.ai_pipeline import transcribe_audio
+    
+    webm_path = None
+    wav_path = None
+    
+    try:
+        # Save uploaded file to temp location
+        suffix = ".webm"
+        if file.filename:
+            ext = os.path.splitext(file.filename)[1]
+            if ext:
+                suffix = ext
+        
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            webm_path = tmp.name
+        
+        print(f"[TRANSCRIBE] Uploaded file saved to: {webm_path}")
+        
+        # Convert to wav if needed
+        wav_path = webm_path.replace(".webm", ".wav").replace(".webm", ".wav")
+        if webm_path.endswith((".webm", ".ogg", ".m4a")):
+            print(f"[TRANSCRIBE] Converting to WAV using ffmpeg...")
+            try:
+                subprocess.run([
+                    "ffmpeg", "-i", webm_path,
+                    "-ar", "16000", "-ac", "1",
+                    "-f", "wav", wav_path,
+                    "-y", "-loglevel", "quiet"
+                ], check=True, timeout=30)
+                print(f"[TRANSCRIBE] Conversion OK: {wav_path}")
+                transcribe_path = wav_path
+            except subprocess.CalledProcessError as e:
+                print(f"[TRANSCRIBE] ffmpeg failed: {e}, trying direct transcription")
+                transcribe_path = webm_path
+        else:
+            transcribe_path = webm_path
+        
+        # Call Whisper transcription
+        result = transcribe_audio(transcribe_path)
+        return result
+    
+    except Exception as e:
+        print(f"[TRANSCRIBE] Error: {e}")
+        return {"transcript": "", "success": False, "error": str(e)}
+    
+    finally:
+        # Clean up temp files
+        for path in [webm_path, wav_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except:
+                    pass

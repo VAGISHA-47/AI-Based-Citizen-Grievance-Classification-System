@@ -1,10 +1,11 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
 export function ProtectedRoute({ children, role }) {
-  const token = useAuthStore((s) => s.token) || localStorage.getItem('jansetu_token');
-  const activeRole = useAuthStore((s) => s.role) || localStorage.getItem('jansetu_role');
+  const storeToken = useAuthStore((s) => s.token);
+  const storeRole = useAuthStore((s) => s.role);
+  const token = localStorage.getItem('jansetu_token') || storeToken;
+  const activeRole = localStorage.getItem('jansetu_role') || storeRole;
 
   if (!token && !activeRole) {
     if (role === 'officer') {

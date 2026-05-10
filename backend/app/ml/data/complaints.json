@@ -2,5 +2,11 @@
   "Roads": [
     "Severe water leakage on main road near andheri station",
     "pothole on main road"
+  ],
+  "Electricity": [
+    "Shortage of water",
+    "No description provided",
+    "Issue",
+    "Fresh test complaint from UI end to end"
   ]
 }
