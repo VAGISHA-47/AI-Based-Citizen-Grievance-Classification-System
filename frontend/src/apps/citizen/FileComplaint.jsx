@@ -101,17 +101,19 @@ export function FileComplaint() {
         try {
           const formData = new FormData();
           formData.append("file", blob, "voice_note.webm");
-          const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-          const res = await fetch(`${apiUrl}/grievances/test/transcribe-audio`, {
+          const { default: API_BASE_URL } = await import('../../config/api');
+          const res = await fetch(`${API_BASE_URL}/grievances/test/transcribe-audio`, {
             method: "POST",
             body: formData,
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           console.log("[VOICE] Response:", data);
           if (data.transcript) {
             setTranscript(data.transcript);
           } else if (data.error) {
             console.error("[VOICE] Error:", data.error);
+            setTranscript("Could not transcribe. Please type manually.");
+          } else {
             setTranscript("Could not transcribe. Please type manually.");
           }
         } catch (err) {

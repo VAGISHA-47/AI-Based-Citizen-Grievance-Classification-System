@@ -17,20 +17,11 @@ app = FastAPI(
 )
 
 
-# Configure CORS for frontend development URLs
-allowed_origins = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "https://organic-trout-v6p95wvxr5pj36ww9-5173.app.github.dev",
-    "https://organic-trout-v6p95wvxr5pj36ww9-5174.app.github.dev",
-    "https://organic-trout-v6p95wvxr5pj36ww9-8000.app.github.dev",
-]
-
+# Configure CORS for development: allow all origins so browser requests
+# (including forwarded Codespace/GitHub.dev URLs) receive CORS headers.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

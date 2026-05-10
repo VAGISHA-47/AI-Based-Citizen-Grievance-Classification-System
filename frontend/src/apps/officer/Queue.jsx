@@ -32,10 +32,10 @@ export function Queue() {
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-      const response = await fetch(`${apiUrl}/grievances/queue`);
+      const { default: API_BASE_URL } = await import('../../config/api');
+      const response = await fetch(`${API_BASE_URL}/grievances/queue`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      const data = await response.json().catch(() => []);
       console.log("[QUEUE] Fetched complaints:", data);
       if (Array.isArray(data) && data.length > 0) {
         setComplaints(data);

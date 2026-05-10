@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+import API_BASE_URL from '../config/api';
+
+const BASE_URL = API_BASE_URL;
 
 const getToken = () => localStorage.getItem("jansetu_token") || "";
 
@@ -8,10 +10,17 @@ async function apiRequest(endpoint, options = {}) {
     ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
     ...options.headers,
   };
-  const res = await fetch(BASE_URL + endpoint, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || "Request failed");
-  return data;
+  try {
+    const res = await fetch(BASE_URL + endpoint, { ...options, headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.detail || data.message || `Request failed (${res.status})`);
+    }
+    return data;
+  } catch (err) {
+    // Surface consistent errors to UI
+    throw new Error(err.message || 'Network request failed');
+  }
 }
 
 // AUTH

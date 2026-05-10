@@ -9,6 +9,11 @@
 
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
+  // Skip service worker during development (avoids MIME/Codespaces issues)
+  if (import.meta.env.DEV) {
+    console.log('Skipping service worker in development');
+    return;
+  }
 
   const isOfficer = window.location.hostname.startsWith('officer.');
 
