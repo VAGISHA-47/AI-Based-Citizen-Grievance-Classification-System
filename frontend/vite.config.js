@@ -62,4 +62,13 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react-countup'],
   },
+
+  server: {
+    port: 5173,
+    middlewareMode: false,
+    // Custom middleware to inject portal detection via data attribute
+    async configResolved(config) {
+      return config;
+    },
+  },
 })

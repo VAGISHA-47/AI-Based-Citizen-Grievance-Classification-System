@@ -17,9 +17,27 @@ import { OfficerProfile } from './apps/officer/OfficerProfile';
 import { OfficerLogin } from './apps/officer/OfficerLogin';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
+// Helper function to check if accessing officer routes
+function isOfficerPath(pathname) {
+  return pathname.startsWith('/officer');
+}
+
+// Catch-all route component that redirects based on path
+function CatchAllRoute() {
+  const pathname = window.location.pathname;
+  if (isOfficerPath(pathname)) {
+    return <Navigate to="/officer/login" replace />;
+  }
+  return <Navigate to="/login" replace />;
+}
+
 function App() {
   const hostname = window.location.hostname;
-  const isOfficerDomain = hostname.startsWith('officer.');
+  const port = window.location.port;
+  const pathname = window.location.pathname;
+  
+  // Officer portal: subdomain (officer.*) OR port (5174/5175) OR path starts with /officer
+  const isOfficerDomain = hostname.startsWith('officer.') || port === '5174' || port === '5175' || pathname.startsWith('/officer');
   
   if (isOfficerDomain) {
     return (
@@ -42,7 +60,7 @@ function App() {
     );
   }
 
-  // Default to Citizen App (handles citizen.jansetu.in or localhost)
+  // Default to Citizen App
   return (
     <BrowserRouter>
       <Routes>
@@ -66,7 +84,8 @@ function App() {
           <Route path="profile" element={<OfficerProfile />} />
         </Route>
         
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Wildcard: If trying to access /officer/* without proper setup, redirect to /officer/login */}
+        <Route path="*" element={<CatchAllRoute />} />
       </Routes>
     </BrowserRouter>
   );
