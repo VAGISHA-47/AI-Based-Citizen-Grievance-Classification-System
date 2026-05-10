@@ -28,13 +28,52 @@ async def submit_grievance(
     ward = get_ward_from_coordinates(float(lat), float(lng))
     tracking_token = generate_tracking_token(title or "General", ward)
 
+    from app.services.ai_pipeline import classify_text, verify_image
+    
+    ai_result = {"category": "General", "priority": "Medium", "sla_days": 5.0}
+    clip_result = {"verified": True, "score": 0.0}
+    
+    description_text = description or title or ""
+    
+    if description_text:
+        ai_result = classify_text(description_text)
+        print(f"[AI] Category: {ai_result['category']} | Priority: {ai_result['priority']} | SLA: {ai_result['sla_days']} days")
+    
+    if file and file.filename:
+        try:
+            image_bytes = await file.read()
+            clip_result = verify_image(description_text, image_bytes)
+            print(f"[AI] Image verified: {clip_result['verified']} | Score: {clip_result['score']}")
+        except Exception as e:
+            print(f"[AI] Image verification skipped: {e}")
+    
+    from app.services.duplicate_service import check_duplicate
+    dup_result = {"is_duplicate": False, "similarity": 0.0}
+    if description_text and ai_result.get("category"):
+        try:
+            dup_result = check_duplicate(description_text, ai_result["category"])
+            print(f"[AI] Duplicate: {dup_result['is_duplicate']} | Similarity: {dup_result['similarity']}")
+        except Exception as e:
+            print(f"[AI] Duplicate check skipped: {e}")
+    
+    if dup_result.get("is_duplicate"):
+        return {
+            "status": "duplicate",
+            "message": "Similar complaint already exists",
+            "matched_complaint": dup_result.get("matched_complaint"),
+            "similarity": dup_result.get("similarity")
+        }
+
     try:
         from app.db.supabase_client import supabase
 
         result = supabase.table("complaints").insert({
             "tracking_token": tracking_token,
             "text_original": description,
-            "category": title,
+            "category": ai_result.get("category", "General"),
+            "priority": ai_result.get("priority", "medium").lower(),
+            "sla_days": ai_result.get("sla_days", 5.0),
+            "ai_confidence": clip_result.get("score", 0.0),
             "lat": float(lat),
             "lng": float(lng),
             "status": "submitted",
@@ -63,8 +102,9 @@ async def submit_grievance(
             grievance_id,
             {
                 "description": description,
-                "category": "",                    # will be filled by AI
-                "priority": "MEDIUM",              # default
+                "category": ai_result.get("category", "General"),
+                "priority": ai_result.get("priority", "MEDIUM").upper(),
+                "sla_days": ai_result.get("sla_days", 5.0),
                 "sentiment": "Neutral",
                 "citizen_name": citizen_name,
                 "citizen_phone": citizen_phone,
@@ -119,3 +159,25 @@ async def test_token():
     sla = calculate_sla("Water Supply", "HIGH")
     zone = get_zone_room(ward)
     return {"token": token, "ward": ward, "zone": zone, "sla_days": sla}
+
+
+@router.post("/test/ai-classify")
+async def test_classify(text: str = Form(...)):
+    from app.services.ai_pipeline import classify_text
+    result = classify_text(text)
+    return {"input": text, "result": result}
+
+
+@router.post("/test/ai-verify-image")
+async def test_verify(text: str = Form(...), file: UploadFile = File(...)):
+    from app.services.ai_pipeline import verify_image
+    image_bytes = await file.read()
+    result = verify_image(text, image_bytes)
+    return {"input_text": text, "result": result}
+
+
+@router.post("/test/ai-duplicate")
+async def test_duplicate(text: str = Form(...), category: str = Form(...)):
+    from app.services.duplicate_service import check_duplicate
+    result = check_duplicate(text, category)
+    return {"input": text, "result": result}

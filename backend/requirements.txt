@@ -10,3 +10,9 @@ python-jose==3.3.0
 python-multipart==0.0.6
 supabase==2.16.0
 uvicorn==0.24.0
+scikit-learn
+sentence-transformers
+openai-whisper
+torch
+transformers
+Pillow
