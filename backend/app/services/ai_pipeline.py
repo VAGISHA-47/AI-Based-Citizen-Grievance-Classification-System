@@ -90,16 +90,26 @@ def verify_image(text: str, image_bytes: bytes) -> dict:
 
 def transcribe_audio(audio_path: str) -> dict:
     try:
-        import whisper
-        print(f"[WHISPER] Loading model for: {audio_path}")
+        print("[WHISPER] Importing whisper...")
+        try:
+            import whisper
+        except ModuleNotFoundError:
+            print("[WHISPER] Not installed. Installing now...")
+            import subprocess, sys
+            subprocess.run(
+                [sys.executable, "-m", "pip", 
+                 "install", "openai-whisper", "-q"],
+                check=True
+            )
+            import whisper
+        
+        print(f"[WHISPER] Transcribing: {audio_path}")
         model = whisper.load_model("base")
         result = model.transcribe(audio_path, fp16=False)
         transcript = result.get("text", "").strip()
-        print(f"[WHISPER] Transcript: {transcript}")
-        return {
-            "transcript": transcript,
-            "success": True
-        }
+        print(f"[WHISPER] Done: {transcript[:80]}")
+        return {"transcript": transcript, "success": True}
+
     except Exception as e:
         print(f"[WHISPER] Error: {e}")
         return {
