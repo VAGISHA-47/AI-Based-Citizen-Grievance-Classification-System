@@ -15,7 +15,7 @@ echo "Backend URL set to: ${BACKEND_URL}"
 
 # Start backend
 cd /workspaces/AI-Based-Citizen-Grievance-Classification-System/backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+/home/codespace/.python/current/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
 echo "Backend started on port 8000"
 sleep 4
 
