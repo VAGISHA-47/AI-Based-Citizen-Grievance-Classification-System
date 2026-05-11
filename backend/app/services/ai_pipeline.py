@@ -69,9 +69,12 @@ def transcribe_audio(audio_path: str) -> dict:
                 response = client.post(_endpoint("/transcribe"), files=files)
         response.raise_for_status()
         data = response.json()
+        transcript = str(data.get("transcript", ""))
+        success = bool(data.get("success", False))
+        print(f"[AI-PROXY] transcribe_audio result: transcript='{transcript}' success={success}")
         return {
-            "transcript": str(data.get("transcript", "")),
-            "success": bool(data.get("success", False)),
+            "transcript": transcript,
+            "success": success,
             **({"error": str(data.get("error"))} if data.get("error") else {}),
         }
 

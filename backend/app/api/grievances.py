@@ -79,10 +79,13 @@ async def submit_grievance(
     tracking_token = generate_tracking_token(title or "General", ward)
     auth_header = request.headers.get("authorization")
 
-    from app.services.ai_pipeline import classify_text, verify_image
+    from app.services.ai_pipeline import classify_text, verify_image, transcribe_audio
+    import tempfile
+    import subprocess
     
     ai_result = {"category": "General", "priority": "Medium", "sla_days": 5.0}
     clip_result = {"verified": True, "score": 0.0}
+    transcript_text = ""
     
     description_text = description or title or ""
     
@@ -90,13 +93,66 @@ async def submit_grievance(
         ai_result = classify_text(description_text)
         print(f"[AI] Category: {ai_result['category']} | Priority: {ai_result['priority']} | SLA: {ai_result['sla_days']} days")
     
+    # Handle uploaded file - determine if audio or image
     if file and file.filename:
-        try:
-            image_bytes = await file.read()
-            clip_result = verify_image(description_text, image_bytes)
-            print(f"[AI] Image verified: {clip_result['verified']} | Score: {clip_result['score']}")
-        except Exception as e:
-            print(f"[AI] Image verification skipped: {e}")
+        file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
+        is_audio = file_ext in ('wav', 'mp3', 'webm', 'ogg', 'm4a', 'flac')
+        is_image = file_ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
+        
+        file_content = await file.read()
+        
+        if is_audio:
+            # TRANSCRIBE AUDIO
+            print(f"[SUBMISSION] Processing audio file: {file.filename}")
+            webm_path = None
+            wav_path = None
+            try:
+                # Save uploaded file to temp location
+                with tempfile.NamedTemporaryFile(suffix=f".{file_ext}", delete=False) as tmp:
+                    tmp.write(file_content)
+                    webm_path = tmp.name
+                
+                # Convert to wav if needed
+                if file_ext in ('webm', 'ogg', 'm4a'):
+                    wav_path = webm_path.replace(f".{file_ext}", ".wav")
+                    try:
+                        subprocess.run([
+                            "ffmpeg", "-i", webm_path,
+                            "-ar", "16000", "-ac", "1",
+                            "-f", "wav", wav_path,
+                            "-y", "-loglevel", "quiet"
+                        ], check=True, timeout=30)
+                        transcribe_path = wav_path
+                    except Exception as e:
+                        print(f"[SUBMISSION] ffmpeg failed: {e}, using original")
+                        transcribe_path = webm_path
+                else:
+                    transcribe_path = webm_path
+                
+                # Transcribe using AI engine
+                transcribe_result = transcribe_audio(transcribe_path)
+                transcript_text = transcribe_result.get("transcript", "")
+                print(f"[SUBMISSION] Transcript: '{transcript_text}'")
+                
+            except Exception as e:
+                print(f"[SUBMISSION] Audio transcription error: {e}")
+            finally:
+                # Clean up temp files
+                for path in [webm_path, wav_path]:
+                    if path and os.path.exists(path):
+                        try:
+                            os.unlink(path)
+                        except:
+                            pass
+        
+        elif is_image:
+            # VERIFY IMAGE
+            print(f"[SUBMISSION] Processing image file: {file.filename}")
+            try:
+                clip_result = verify_image(description_text, file_content)
+                print(f"[AI] Image verified: {clip_result['verified']} | Score: {clip_result['score']}")
+            except Exception as e:
+                print(f"[AI] Image verification skipped: {e}")
     
     from app.services.duplicate_service import check_duplicate
     dup_result = {"is_duplicate": False, "similarity": 0.0}
@@ -119,11 +175,15 @@ async def submit_grievance(
         from app.db.supabase_client import supabase
         user_id = _resolve_user_id(auth_header, citizen_phone, citizen_name)
 
+        # Use transcript if available, otherwise use description
+        final_text = transcript_text or description
+        print(f"[SUBMISSION] Saving complaint with text_english='{final_text[:100]}...'")
+
         result = supabase.table("complaints").insert({
             "user_id": user_id,
             "tracking_token": tracking_token,
-            "text_original": description,
-            "text_english": description,
+            "text_original": final_text,
+            "text_english": final_text,
             "language_code": "en",
             "category": ai_result.get("category", "General"),
             "priority": ai_result.get("priority", "medium").lower(),
