@@ -44,6 +44,7 @@ export function FileComplaint() {
   const [mediaFile, setMediaFile] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [audioBlob, setAudioBlob] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const fileInputRef = useRef(null);
   const complaintCategory = selectedCategory || 'General';
@@ -95,7 +96,9 @@ export function FileComplaint() {
         stream.getTracks().forEach(t => t.stop());
         setIsRecording(false);
         
-        console.log("[VOICE] Recording stopped, sending to backend...");
+        // Store audio blob for later submission with complaint
+        setAudioBlob(blob);
+        console.log("[VOICE] Recording stopped, sending to backend for transcription...");
         
         // Send to backend Whisper for transcription
         try {
@@ -147,22 +150,48 @@ export function FileComplaint() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const { submitComplaint } = await import('../../services/api');
-      const response = await submitComplaint({
-        text: text || 'No description provided',
-        language: lang,
-        lat: gps?.lat ?? 19.076,
-        lng: gps?.lng ?? 72.877,
-        address: address || gps?.address || 'Location not captured',
-        media_urls: [],
-        category: complaintCategory,
+      const { default: API_BASE_URL } = await import('../../config/api');
+      
+      // Prepare FormData for /grievances/ endpoint which handles voice files
+      const formData = new FormData();
+      formData.append("title", complaintCategory || "General Complaint");
+      formData.append("description", (transcript || text) || 'No description provided');
+      formData.append("channel", "web");
+      formData.append("lat", gps?.lat ?? 19.076);
+      formData.append("lng", gps?.lng ?? 72.877);
+      formData.append("citizen_name", "Citizen");
+      formData.append("citizen_phone", "0000000000");
+      formData.append("address", address || gps?.address || 'Location not captured');
+      
+      // Include audio file if available for backend to transcribe
+      if (audioBlob) {
+        formData.append("file", audioBlob, "voice_complaint.webm");
+        console.log("[SUBMISSION] Including audio file with complaint");
+      }
+      
+      // Send to /grievances/ endpoint which handles FormData and voice transcription
+      const res = await fetch(`${API_BASE_URL}/grievances/`, {
+        method: "POST",
+        body: formData,
       });
-
-      const generatedToken = response.tracking_token || response.trackingToken;
-      if (!generatedToken) {
-        throw new Error(response?.detail || 'Backend did not return a tracking token');
+      
+      const response = await res.json().catch(() => ({}));
+      
+      if (!res.ok) {
+        throw new Error(response?.detail || response?.message || `Submission failed (${res.status})`);
       }
 
+      const generatedToken = response.tracking_token || response.grievance_id;
+      if (!generatedToken) {
+        throw new Error(response?.detail || response?.message || 'Backend did not return a tracking token');
+      }
+
+      console.log("[SUBMISSION] Complaint submitted successfully:", {
+        tracking_token: generatedToken,
+        transcript: transcript,
+        audio_included: !!audioBlob,
+      });
+      
       setTrackingToken(generatedToken);
       localStorage.setItem('last_tracking_token', generatedToken);
       setSubmitted(true);
@@ -193,7 +222,7 @@ export function FileComplaint() {
               <span>📱</span> SMS confirmation sent to +91 98765 43210
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'center' }}>
-              <Button variant="primary" onClick={() => { setSubmitted(false); setStep(0); setText(''); setGps(null); setTrackingToken(''); setMediaFile(null); setSelectedCategory(''); setAddress(''); }}>
+              <Button variant="primary" onClick={() => { setSubmitted(false); setStep(0); setText(''); setGps(null); setTrackingToken(''); setMediaFile(null); setSelectedCategory(''); setAddress(''); setTranscript(''); setAudioBlob(null); }}>
                 File Another
               </Button>
               <Button variant="outline" onClick={() => navigate(`/citizen/track?token=${encodeURIComponent(trackingToken)}`)}>

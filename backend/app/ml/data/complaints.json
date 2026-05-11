@@ -14,7 +14,10 @@
     "Unique pothole complaint for token test 2026-05-10 12:34",
     "Unique token check 2 with different words and no previous duplicates",
     "Electricity pole down near market causes danger",
-    "Complete end-to-end system test. Flooding caused by blocked drainage system. Water level is rising."
+    "Complete end-to-end system test. Flooding caused by blocked drainage system. Water level is rising.",
+    "Will be overridden by voice transcript",
+    "Placeholder text",
+    "Testing voice submission after frontend fix"
   ],
   "Water Supply": [
     "Water issue",
