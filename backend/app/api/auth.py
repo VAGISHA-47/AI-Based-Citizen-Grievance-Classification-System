@@ -1,41 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
-import bcrypt
-from app.utils.auth import verify_token
+from app.utils.auth import verify_token, verify_password, hash_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # OAuth2 scheme for extracting bearer token from Authorization header
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
-def _verify_password_safe(plain_password: str, hashed_password: str) -> bool:
-    try:
-        from app.utils.auth import verify_password
-        return verify_password(plain_password, hashed_password)
-    except Exception as exc:
-        try:
-            return bcrypt.checkpw(
-                plain_password.encode("utf-8"),
-                hashed_password.encode("utf-8"),
-            )
-        except Exception as fallback_exc:
-            print(f"[LOGIN ERROR] Password verification failed: {exc}; fallback: {fallback_exc}")
-            return False
-
-
-def _hash_password_safe(password: str) -> str:
-    try:
-        from app.utils.auth import hash_password
-        return hash_password(password)
-    except Exception as exc:
-        try:
-            return bcrypt.hashpw(
-                password.encode("utf-8"),
-                bcrypt.gensalt(),
-            ).decode("utf-8")
-        except Exception as fallback_exc:
-            raise RuntimeError(f"Password hashing failed: {exc}; fallback: {fallback_exc}")
 
 
 @router.post("/register")
@@ -75,7 +45,7 @@ async def register(request: Request):
         # Insert only safe columns
         insert_data = {
             "name": name or "User",
-            "password_hash": _hash_password_safe(password),
+            "password_hash": hash_password(password),
             "role": "citizen",
             "trust_score": 50,
             "trust_level": "new",
@@ -135,7 +105,7 @@ async def login(request: Request):
     user = result.data[0]
 
     # Verify password; on failure, return generic message as well
-    if not _verify_password_safe(password, user["password_hash"]):
+    if not verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user["email"] or user["phone"], "role": user["role"]})
