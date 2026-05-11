@@ -13,7 +13,8 @@
     "Fresh complaint after guest hash fix",
     "Unique pothole complaint for token test 2026-05-10 12:34",
     "Unique token check 2 with different words and no previous duplicates",
-    "Electricity pole down near market causes danger"
+    "Electricity pole down near market causes danger",
+    "Complete end-to-end system test. Flooding caused by blocked drainage system. Water level is rising."
   ],
   "Water Supply": [
     "Water issue",
@@ -23,7 +24,8 @@
     "Unique token check 2 with different words and no previous duplicates"
   ],
   "Sanitation": [
-    "issue"
+    "issue",
+    "suffering"
   ],
   "Parks & Recreation": [
     "No description provided"

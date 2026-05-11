@@ -7,6 +7,7 @@ from app.api import user_routes, authority_routes, auth, grievances, officer, ws
 from app.api.complaints import router as complaints_router
 from app.api.locations import router as locations_router
 from app.db.supabase_client import ping_supabase
+from app.services.ai_pipeline import check_ai_engine_health
 
 
 # Initialize FastAPI app with Phase 2 metadata
@@ -30,7 +31,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Test Supabase connection on startup."""
+    """Validate critical dependencies before accepting requests."""
+    ok, detail = await check_ai_engine_health()
+    if not ok:
+        raise RuntimeError(f"AI engine health check failed: {detail}")
     await ping_supabase()
 
 

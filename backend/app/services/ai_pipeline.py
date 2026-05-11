@@ -1,117 +1,82 @@
-import pickle
 import os
-import io
+import httpx
 
-BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "ml")
-WEIGHTS_DIR = os.path.join(BASE_DIR, "weights")
+AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://localhost:8001")
+_TIMEOUT = 30.0
 
-_vectorizer = None
-_classifier = None
-_priority_classifier = None
-_sla_model = None
-_clip_model = None
-_clip_processor = None
 
-def _load_pkl_models():
-    global _vectorizer, _classifier, _priority_classifier, _sla_model
+def _endpoint(path: str) -> str:
+    return f"{AI_ENGINE_URL.rstrip('/')}{path}"
+
+
+async def check_ai_engine_health() -> tuple[bool, str]:
     try:
-        with open(os.path.join(WEIGHTS_DIR, "vectorizer.pkl"), "rb") as f:
-            _vectorizer = pickle.load(f)
-        with open(os.path.join(WEIGHTS_DIR, "classifier.pkl"), "rb") as f:
-            _classifier = pickle.load(f)
-        with open(os.path.join(WEIGHTS_DIR, "priority_classifier.pkl"), "rb") as f:
-            _priority_classifier = pickle.load(f)
-        with open(os.path.join(WEIGHTS_DIR, "sla_model.pkl"), "rb") as f:
-            _sla_model = pickle.load(f)
-        print("[AI] Custom models loaded successfully")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(_endpoint("/health"))
+        if response.status_code != 200:
+            return False, f"status={response.status_code} body={response.text[:200]}"
+        data = response.json()
+        if data.get("status") != "ok":
+            return False, f"unexpected-health-payload={data}"
+        if not data.get("ready"):
+            return False, f"ai-engine-not-ready: {data}"
+        return True, "ok"
     except Exception as e:
-        print(f"[AI] Custom model loading failed: {e}")
-
-def _load_clip():
-    global _clip_model, _clip_processor
-    try:
-        from transformers import CLIPProcessor, CLIPModel
-        print("[AI] Loading CLIP model...")
-        _clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        _clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        print("[AI] CLIP loaded successfully")
-    except Exception as e:
-        print(f"[AI] CLIP loading failed: {e}")
-
-_load_pkl_models()
-_load_clip()
+        return False, str(e)
 
 def classify_text(text: str) -> dict:
     try:
-        if _vectorizer is None or _classifier is None:
-            return {"category": "General", "priority": "Medium", "sla_days": 5.0}
-        vec = _vectorizer.transform([text])
-        category = _classifier.predict(vec)[0]
-        priority = _priority_classifier.predict(vec)[0] if _priority_classifier else "Medium"
-        sla_days = 5.0
-        if _sla_model:
-            try:
-                sla_days = float(_sla_model.predict(vec)[0])
-            except:
-                sla_days = 5.0
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            response = client.post(_endpoint("/classify"), data={"text": text})
+        response.raise_for_status()
+        data = response.json()
         return {
-            "category": str(category),
-            "priority": str(priority),
-            "sla_days": round(sla_days, 1)
+            "category": str(data.get("category", "General")),
+            "priority": str(data.get("priority", "Medium")),
+            "sla_days": float(data.get("sla_days", 5.0)),
         }
     except Exception as e:
-        print(f"[AI] classify_text error: {e}")
+        print(f"[AI-PROXY] classify_text error: {e}")
         return {"category": "General", "priority": "Medium", "sla_days": 5.0}
+
 
 def verify_image(text: str, image_bytes: bytes) -> dict:
     try:
-        import torch
-        from PIL import Image
-        
-        if _clip_model is None:
-            return {"verified": True, "score": 0.0, "reason": "CLIP not loaded"}
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        inputs = _clip_processor(
-            text=[f"a photo of {text}", "a random unrelated photo"],
-            images=image,
-            return_tensors="pt",
-            padding=True
-        )
-        with torch.no_grad():
-            outputs = _clip_model(**inputs)
-        probs = outputs.logits_per_image.softmax(dim=1)
-        score = probs[0][0].item()
-        if score < 0.6:
-            return {"verified": False, "score": round(score, 3), "reason": "Image does not match description"}
-        return {"verified": True, "score": round(score, 3), "reason": "Image verified"}
+        files = {
+            "file": ("image.jpg", image_bytes, "application/octet-stream"),
+        }
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            response = client.post(_endpoint("/verify-image"), data={"text": text}, files=files)
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "verified": bool(data.get("verified", True)),
+            "score": float(data.get("score", 0.0)),
+            "reason": str(data.get("reason", "Image verification completed")),
+        }
     except Exception as e:
-        print(f"[AI] verify_image error: {e}")
+        print(f"[AI-PROXY] verify_image error: {e}")
         return {"verified": True, "score": 0.0, "reason": str(e)}
+
 
 def transcribe_audio(audio_path: str) -> dict:
     try:
-        print("[WHISPER] Importing whisper...")
-        try:
-            import whisper
-        except ModuleNotFoundError:
-            print("[WHISPER] Not installed. Installing now...")
-            import subprocess, sys
-            subprocess.run(
-                [sys.executable, "-m", "pip", 
-                 "install", "openai-whisper", "-q"],
-                check=True
-            )
-            import whisper
-        
-        print(f"[WHISPER] Transcribing: {audio_path}")
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_path, fp16=False)
-        transcript = result.get("text", "").strip()
-        print(f"[WHISPER] Done: {transcript[:80]}")
-        return {"transcript": transcript, "success": True}
+        with open(audio_path, "rb") as f:
+            files = {
+                "file": (os.path.basename(audio_path) or "audio.wav", f, "application/octet-stream"),
+            }
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(_endpoint("/transcribe"), files=files)
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "transcript": str(data.get("transcript", "")),
+            "success": bool(data.get("success", False)),
+            **({"error": str(data.get("error"))} if data.get("error") else {}),
+        }
 
     except Exception as e:
-        print(f"[WHISPER] Error: {e}")
+        print(f"[AI-PROXY] transcribe_audio error: {e}")
         return {
             "transcript": "",
             "success": False,
