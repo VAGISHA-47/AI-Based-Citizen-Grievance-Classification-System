@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
+import bcrypt
 from app.utils.auth import verify_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -8,48 +9,108 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+def _verify_password_safe(plain_password: str, hashed_password: str) -> bool:
+    try:
+        from app.utils.auth import verify_password
+        return verify_password(plain_password, hashed_password)
+    except Exception as exc:
+        try:
+            return bcrypt.checkpw(
+                plain_password.encode("utf-8"),
+                hashed_password.encode("utf-8"),
+            )
+        except Exception as fallback_exc:
+            print(f"[LOGIN ERROR] Password verification failed: {exc}; fallback: {fallback_exc}")
+            return False
+
+
+def _hash_password_safe(password: str) -> str:
+    try:
+        from app.utils.auth import hash_password
+        return hash_password(password)
+    except Exception as exc:
+        try:
+            return bcrypt.hashpw(
+                password.encode("utf-8"),
+                bcrypt.gensalt(),
+            ).decode("utf-8")
+        except Exception as fallback_exc:
+            raise RuntimeError(f"Password hashing failed: {exc}; fallback: {fallback_exc}")
+
+
 @router.post("/register")
-async def register(payload: dict):
-    """Register a new user using phone or email. Persists to Supabase users table."""
-    from app.db.supabase_client import supabase
-    from app.utils.auth import hash_password
+async def register(request: Request):
+    try:
+        body = await request.json()
+        from app.db.supabase_client import supabase
 
-    # Accept body as dict-like payload
-    email = payload.get("email") or payload.get("phone") or ""
-    phone = payload.get("phone") or ""
-    name = payload.get("name") or "Citizen"
-    password = payload.get("password", "")
+        phone = str(body.get("phone", "")).strip()
+        email = str(body.get("email", "")).strip()
+        name = str(body.get("name", "User")).strip()
+        password = str(body.get("password", "")).strip()
 
-    if not password or (not phone and not email):
-        raise HTTPException(status_code=422, detail="phone/email and password are required")
+        if not phone and not email:
+            raise HTTPException(
+                status_code=400,
+                detail="Phone or email is required"
+            )
 
-    # Check if user already exists by phone or email
-    existing = None
-    if phone:
-        existing = supabase.table("users").select("user_id").eq("phone", phone).execute()
-    if not existing or not existing.data:
+        if not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Password is required"
+            )
+
+        # Check if user already exists
+        if phone:
+            existing = supabase.table("users").select(
+                "user_id"
+            ).eq("phone", phone).execute()
+            if existing.data:
+                raise HTTPException(
+                    status_code=400,
+                    detail="User with this phone already exists"
+                )
+
+        # Insert only safe columns
+        insert_data = {
+            "name": name or "User",
+            "password_hash": _hash_password_safe(password),
+            "role": "citizen",
+            "trust_score": 50,
+            "trust_level": "new",
+            "is_verified": False,
+            "language_pref": "hi",
+        }
+
+        if phone:
+            insert_data["phone"] = phone
         if email:
-            existing = supabase.table("users").select("user_id").eq("email", email).execute()
+            insert_data["email"] = email
 
-    if existing and existing.data:
-        raise HTTPException(status_code=400, detail="User already exists")
+        result = supabase.table("users").insert(
+            insert_data
+        ).execute()
 
-    # Insert user row
-    result = supabase.table("users").insert({
-        "phone": phone,
-        "email": email,
-        "name": name,
-        "password_hash": hash_password(password),
-        "role": "citizen",
-        "trust_score": 50,
-        "trust_level": "new",
-        "is_verified": False,
-    }).execute()
+        if not result.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Registration failed"
+            )
 
-    if not result or not result.data:
-        raise HTTPException(status_code=500, detail="Registration failed")
+        return {
+            "message": "Registration successful",
+            "user_id": str(result.data[0]["user_id"])
+        }
 
-    return {"message": "User registered successfully", "user_id": str(result.data[0]["user_id"])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[REGISTER ERROR] {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Registration error: {str(e)}"
+        )
 
 
 @router.post("/auth/login")
@@ -62,7 +123,7 @@ async def login(request: Request):
     password = body.get("password", "")
 
     from app.db.supabase_client import supabase
-    from app.utils.auth import verify_password, create_access_token
+    from app.utils.auth import create_access_token
 
     # Search by email first, then by phone (simple two-step lookup)
     result = supabase.table("users").select("*").eq("email", identifier).execute()
@@ -74,7 +135,7 @@ async def login(request: Request):
     user = result.data[0]
 
     # Verify password; on failure, return generic message as well
-    if not verify_password(password, user["password_hash"]):
+    if not _verify_password_safe(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token({"sub": user["email"] or user["phone"], "role": user["role"]})

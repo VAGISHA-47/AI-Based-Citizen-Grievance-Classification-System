@@ -12,10 +12,12 @@
     "Fresh complaint after user_id fix",
     "Fresh complaint after guest hash fix",
     "Unique pothole complaint for token test 2026-05-10 12:34",
-    "Unique token check 2 with different words and no previous duplicates"
+    "Unique token check 2 with different words and no previous duplicates",
+    "Electricity pole down near market causes danger"
   ],
   "Water Supply": [
-    "Water issue"
+    "Water issue",
+    "Water pipeline broken near hospital causing shortage"
   ],
   "General": [
     "Unique token check 2 with different words and no previous duplicates"

@@ -1,5 +1,7 @@
-const API_BASE_URL =
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "https://organic-trout-pjjq9xg7gq7c6j5-8000.app.github.dev";
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 
 export default API_BASE_URL;

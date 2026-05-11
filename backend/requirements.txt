@@ -16,3 +16,4 @@ openai-whisper
 torch
 transformers
 Pillow
+openai-whisper

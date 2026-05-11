@@ -123,13 +123,18 @@ async def submit_grievance(
             "user_id": user_id,
             "tracking_token": tracking_token,
             "text_original": description,
+            "text_english": description,
+            "language_code": "en",
             "category": ai_result.get("category", "General"),
             "priority": ai_result.get("priority", "medium").lower(),
-            "sla_days": ai_result.get("sla_days", 5.0),
+            "sentiment": "neutral",
             "ai_confidence": clip_result.get("score", 0.0),
+            "auth_score": 50.0,
+            "status": "submitted",
+            "address": address or "",
             "lat": float(lat),
             "lng": float(lng),
-            "status": "submitted",
+            "sla_days": ai_result.get("sla_days", 5.0),
         }).execute()
 
         grievance_id = None
