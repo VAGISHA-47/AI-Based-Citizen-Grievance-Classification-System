@@ -3,6 +3,7 @@ import httpx
 
 AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://localhost:8001")
 _TIMEOUT = 30.0
+_TRANSCRIBE_TIMEOUT = 120.0  # Voice transcription can take 30-60+ seconds
 
 
 def _endpoint(path: str) -> str:
@@ -60,12 +61,14 @@ def verify_image(text: str, image_bytes: bytes) -> dict:
 
 
 def transcribe_audio(audio_path: str) -> dict:
+    """Transcribe audio file to text. Timeout is set to 120+ seconds for long audio."""
     try:
         with open(audio_path, "rb") as f:
             files = {
                 "file": (os.path.basename(audio_path) or "audio.wav", f, "application/octet-stream"),
             }
-            with httpx.Client(timeout=120.0) as client:
+            # Use extended timeout for transcription (can take 30-60+ seconds)
+            with httpx.Client(timeout=_TRANSCRIBE_TIMEOUT) as client:
                 response = client.post(_endpoint("/transcribe"), files=files)
         response.raise_for_status()
         data = response.json()

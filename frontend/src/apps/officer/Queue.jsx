@@ -2,14 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { TrendingUp, TrendingDown, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
-
-// Fallback complaints (shown while loading or if API fails)
-const DEFAULT_QUEUE = [
-  { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44',    cat: 'Roads',          dept: 'PWD',    citizen: 'Rahul Sharma',  priority: 'high',   slaHours: 0.25, status: 'submitted',      critical: true },
-];
-
-const FILTERS = ['All (142)', 'High Priority (28)', 'SLA Warning (18)'];
+import { RefreshCw } from 'lucide-react';
 
 function SLATimer({ hours }) {
   const color = hours < 1 ? 'var(--status-high)' : hours < 24 ? 'var(--status-med)' : 'var(--text-secondary)';
@@ -25,23 +18,37 @@ function SLATimer({ hours }) {
 
 export function Queue() {
   const [activeFilter, setActiveFilter] = useState(0);
-  const [complaints, setComplaints] = useState(DEFAULT_QUEUE);
+  const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  const highPriorityCount = complaints.filter(
+    (c) => (c.priority || '').toLowerCase() === 'high'
+  ).length;
+  const warningCount = complaints.filter(
+    (c) => Number(c.sla_days ?? 5) * 24 < 24
+  ).length;
+  const filters = [
+    `All (${complaints.length})`,
+    `High Priority (${highPriorityCount})`,
+    `SLA Warning (${warningCount})`,
+  ];
 
   const fetchComplaints = async () => {
     setLoading(true);
     try {
-      const { default: API_BASE_URL } = await import('../../config/api');
-      const response = await fetch(`${API_BASE_URL}/grievances/queue`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const response = await fetch('/officer/assigned', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('jansetu_token')}`,
+        },
+      });
       const data = await response.json().catch(() => []);
-      console.log("[QUEUE] Fetched complaints:", data);
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setComplaints(data);
+        console.log('[QUEUE] Loaded:', data.length);
       }
     } catch (err) {
-      console.error("[QUEUE] Failed to fetch:", err);
+      console.error('[QUEUE] Error:', err);
     } finally {
       setLoading(false);
       setLastRefresh(new Date());
@@ -49,13 +56,43 @@ export function Queue() {
   };
 
   useEffect(() => {
-    // Fetch on mount
     fetchComplaints();
-    
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchComplaints, 10000);
-    return () => clearInterval(interval);
   }, []);
+
+  const handleResolve = async (complaintId) => {
+    if (!window.confirm(
+      'Mark this complaint as resolved?'
+    )) return;
+
+    try {
+      const res = await fetch(
+        `/officer/${complaintId}/resolve`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('jansetu_token')}`,
+          },
+          body: JSON.stringify({
+            resolution: 'Resolved by officer'
+          })
+        }
+      );
+      const data = await res.json();
+      if (data.status === 'resolved') {
+        alert('✅ Complaint resolved!');
+        setComplaints((prev) =>
+          prev.map((c) =>
+            c.complaint_id === complaintId
+              ? { ...c, status: 'resolved' }
+              : c
+          )
+        );
+      }
+    } catch (err) {
+      alert('Failed to resolve. Try again.');
+    }
+  };
 
   return (
     <div className="animate-fade-in">
@@ -92,7 +129,7 @@ export function Queue() {
 
       {/* Filter Tabs */}
       <div className="filter-tabs">
-        {FILTERS.map((f, i) => (
+        {filters.map((f, i) => (
           <button key={i} className={`filter-tab ${activeFilter === i ? 'active' : ''}`} onClick={() => setActiveFilter(i)}>
             {f}
           </button>
@@ -108,44 +145,46 @@ export function Queue() {
             </div>
           </GlassCard>
         ) : (
-          complaints.map(c => (
-          <GlassCard layer={2} hoverEffect={true} key={c.id} className={`queue-card ${c.critical ? 'critical' : ''}`} style={{
-            borderLeft: `4px solid ${c.priority === 'high' ? 'var(--status-high)' : c.priority === 'medium' ? 'var(--status-med)' : 'var(--status-low)'}`,
+          complaints.map((complaint) => (
+          <GlassCard layer={2} hoverEffect={true} key={complaint.complaint_id} className={`queue-card ${(complaint.priority || '').toLowerCase() === 'high' ? 'critical' : ''}`} style={{
+            borderLeft: `4px solid ${(complaint.priority || '').toLowerCase() === 'high' ? 'var(--status-high)' : (complaint.priority || '').toLowerCase() === 'medium' ? 'var(--status-med)' : 'var(--status-low)'}`,
           }}>
-            {c.critical && <div className="active-badge">ACTIVE</div>}
+            {(complaint.priority || '').toLowerCase() === 'high' && <div className="active-badge">ACTIVE</div>}
 
             <div style={{ paddingLeft: 4 }}>
               <div className="queue-card__row-top">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="queue-card__id">{c.id}</span>
-                  <Badge variant={c.priority}>{c.priority.toUpperCase()}</Badge>
+                  <span className="queue-card__id">{complaint.tracking_token || `#${complaint.complaint_id}`}</span>
+                  <Badge variant={(complaint.priority || 'medium').toLowerCase()}>{(complaint.priority || 'medium').toUpperCase()}</Badge>
                 </div>
-                <SLATimer hours={c.slaHours} />
+                <SLATimer hours={Number(complaint.sla_days ?? 5) * 24} />
               </div>
 
-              <div className="queue-card__title">{c.title}</div>
+              <div className="queue-card__title">{complaint.text_original || 'No description provided'}</div>
 
               <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                <Badge>{c.cat}</Badge>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', alignSelf: 'center' }}>{c.dept}</span>
+                <Badge>{complaint.category || 'General'}</Badge>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', alignSelf: 'center' }}>
+                  {complaint.created_at ? new Date(complaint.created_at).toLocaleString() : 'Unknown time'}
+                </span>
               </div>
 
               <div className="queue-card__row-bottom">
-                <span>👤 {c.citizen}</span>
+                <span>🆔 {complaint.complaint_id}</span>
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: '2px 8px',
                   borderRadius: 20, background: 'rgba(0, 201, 167, 0.1)',
                   color: 'var(--teal-primary)', textTransform: 'uppercase',
                   letterSpacing: '0.04em'
                 }}>
-                  {c.status.replace('_', ' ')}
+                  {(complaint.status || 'submitted').replace('_', ' ')}
                 </span>
               </div>
 
               <div className="queue-card__actions" style={{ paddingTop: 16 }}>
                 <Button variant="outline" size="sm">View</Button>
                 <Button variant="outline" size="sm">Update</Button>
-                <Button variant="primary" size="sm">Resolve</Button>
+                <Button variant="primary" size="sm" onClick={() => handleResolve(complaint.complaint_id)}>Resolve</Button>
               </div>
             </div>
           </GlassCard>

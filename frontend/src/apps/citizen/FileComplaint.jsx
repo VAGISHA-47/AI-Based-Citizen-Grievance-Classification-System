@@ -104,8 +104,7 @@ export function FileComplaint() {
         try {
           const formData = new FormData();
           formData.append("file", blob, "voice_note.webm");
-          const { default: API_BASE_URL } = await import('../../config/api');
-          const res = await fetch(`${API_BASE_URL}/grievances/test/transcribe-audio`, {
+          const res = await fetch("/grievances/test/transcribe-audio", {
             method: "POST",
             body: formData,
           });
@@ -150,8 +149,6 @@ export function FileComplaint() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const { default: API_BASE_URL } = await import('../../config/api');
-      
       // Prepare FormData for /grievances/ endpoint which handles voice files
       const formData = new FormData();
       formData.append("title", complaintCategory || "General Complaint");
@@ -170,8 +167,13 @@ export function FileComplaint() {
       }
       
       // Send to /grievances/ endpoint which handles FormData and voice transcription
-      const res = await fetch(`${API_BASE_URL}/grievances/`, {
+      const res = await fetch("/grievances/", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${
+            localStorage.getItem("jansetu_token") || ""
+          }`
+        },
         body: formData,
       });
       

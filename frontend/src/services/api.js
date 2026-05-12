@@ -1,6 +1,4 @@
-import API_BASE_URL from '../config/api';
-
-const BASE_URL = API_BASE_URL;
+const BASE_URL = "";
 
 const getToken = () => localStorage.getItem("jansetu_token") || "";
 

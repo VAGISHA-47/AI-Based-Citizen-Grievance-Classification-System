@@ -1,3 +1,8 @@
+import os
+import shutil
+import tempfile
+import subprocess
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException, Request
@@ -6,11 +11,23 @@ from app.services.routing_engine import run_routing_engine
 from app.services.geo_mapper import get_ward_from_coordinates
 from app.services.token_generator import generate_tracking_token
 from app.utils.auth import verify_token
+from app.db.supabase_client import supabase
 
 
 router = APIRouter(prefix="/grievances", tags=["grievances"])
 TEMP_COMPLAINTS: dict[str, dict] = {}
 GUEST_PASSWORD_HASH = "$2b$12$n.z8fpfNHSmQZG6X4RckU.uwK843JqTDB7QSHcv2mzhMCRHypQHM2"
+CATEGORY_CODES = {
+    "Roads": "ROADS",
+    "Water Supply": "WATER",
+    "Electricity": "ELEC",
+    "Sanitation": "SAN",
+    "Parks & Recreation": "PARKS",
+    "Health": "HEALTH",
+    "Traffic": "TRF",
+    "Drainage": "DRN",
+    "General": "GEN",
+}
 
 
 def _resolve_user_id(auth_header: str | None, citizen_phone: str, citizen_name: str) -> str:
@@ -60,195 +77,163 @@ def _resolve_user_id(auth_header: str | None, citizen_phone: str, citizen_name: 
     raise HTTPException(status_code=500, detail="Unable to resolve a user record for complaint submission")
 
 
+
 @router.post("/")
 async def submit_grievance(
-    request: Request,
-    title: str = Form(...),
-    description: str = Form(...),
-    channel: str = Form("web"),
-    lat: float = Form(...),
-    lng: float = Form(...),
-    citizen_name: str = Form(...),
-    citizen_phone: str = Form(...),
-    address: str = Form(""),
-    file: UploadFile | None = File(None),
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks,
+    title: str = Form(None),
+    description: str = Form(None),
+    category: str = Form(None),
+    citizen_name: str = Form(None),
+    citizen_phone: str = Form(None),
+    lat: float = Form(19.076),
+    lng: float = Form(72.877),
+    address: str = Form(None),
+    language_code: str = Form("en"),
+    transcript: str = Form(None),
+    file: UploadFile = File(None),
 ):
-    """Submit a citizen grievance and route it through the processing pipeline."""
-    ward = get_ward_from_coordinates(float(lat), float(lng))
-    tracking_token = generate_tracking_token(title or "General", ward)
-    auth_header = request.headers.get("authorization")
-
-    from app.services.ai_pipeline import classify_text, verify_image, transcribe_audio
-    import tempfile
-    import subprocess
-    
-    ai_result = {"category": "General", "priority": "Medium", "sla_days": 5.0}
-    clip_result = {"verified": True, "score": 0.0}
-    transcript_text = ""
-    
-    description_text = description or title or ""
-    
-    if description_text:
-        ai_result = classify_text(description_text)
-        print(f"[AI] Category: {ai_result['category']} | Priority: {ai_result['priority']} | SLA: {ai_result['sla_days']} days")
-    
-    # Handle uploaded file - determine if audio or image
-    if file and file.filename:
-        file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
-        is_audio = file_ext in ('wav', 'mp3', 'webm', 'ogg', 'm4a', 'flac')
-        is_image = file_ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp')
-        
-        file_content = await file.read()
-        
-        if is_audio:
-            # TRANSCRIBE AUDIO
-            print(f"[SUBMISSION] Processing audio file: {file.filename}")
-            webm_path = None
-            wav_path = None
-            try:
-                # Save uploaded file to temp location
-                with tempfile.NamedTemporaryFile(suffix=f".{file_ext}", delete=False) as tmp:
-                    tmp.write(file_content)
-                    webm_path = tmp.name
-                
-                # Convert to wav if needed
-                if file_ext in ('webm', 'ogg', 'm4a'):
-                    wav_path = webm_path.replace(f".{file_ext}", ".wav")
-                    try:
-                        subprocess.run([
-                            "ffmpeg", "-i", webm_path,
-                            "-ar", "16000", "-ac", "1",
-                            "-f", "wav", wav_path,
-                            "-y", "-loglevel", "quiet"
-                        ], check=True, timeout=30)
-                        transcribe_path = wav_path
-                    except Exception as e:
-                        print(f"[SUBMISSION] ffmpeg failed: {e}, using original")
-                        transcribe_path = webm_path
-                else:
-                    transcribe_path = webm_path
-                
-                # Transcribe using AI engine
-                transcribe_result = transcribe_audio(transcribe_path)
-                transcript_text = transcribe_result.get("transcript", "")
-                print(f"[SUBMISSION] Transcript: '{transcript_text}'")
-                
-            except Exception as e:
-                print(f"[SUBMISSION] Audio transcription error: {e}")
-            finally:
-                # Clean up temp files
-                for path in [webm_path, wav_path]:
-                    if path and os.path.exists(path):
-                        try:
-                            os.unlink(path)
-                        except:
-                            pass
-        
-        elif is_image:
-            # VERIFY IMAGE
-            print(f"[SUBMISSION] Processing image file: {file.filename}")
-            try:
-                clip_result = verify_image(description_text, file_content)
-                print(f"[AI] Image verified: {clip_result['verified']} | Score: {clip_result['score']}")
-            except Exception as e:
-                print(f"[AI] Image verification skipped: {e}")
-    
-    from app.services.duplicate_service import check_duplicate
-    dup_result = {"is_duplicate": False, "similarity": 0.0}
-    if description_text and ai_result.get("category"):
-        try:
-            dup_result = check_duplicate(description_text, ai_result["category"])
-            print(f"[AI] Duplicate: {dup_result['is_duplicate']} | Similarity: {dup_result['similarity']}")
-        except Exception as e:
-            print(f"[AI] Duplicate check skipped: {e}")
-    
-    if dup_result.get("is_duplicate"):
-        return {
-            "status": "duplicate",
-            "message": "Similar complaint already exists",
-            "matched_complaint": dup_result.get("matched_complaint"),
-            "similarity": dup_result.get("similarity")
-        }
-
     try:
-        from app.db.supabase_client import supabase
-        user_id = _resolve_user_id(auth_header, citizen_phone, citizen_name)
+        # Use transcript as description if provided
+        final_description = transcript or description or title or "No description"
+        final_title = title or category or "General Complaint"
 
-        # Use transcript if available, otherwise use description
-        final_text = transcript_text or description
-        print(f"[SUBMISSION] Saving complaint with text_english='{final_text[:100]}...'")
-
-        result = supabase.table("complaints").insert({
-            "user_id": user_id,
-            "tracking_token": tracking_token,
-            "text_original": final_text,
-            "text_english": final_text,
-            "language_code": "en",
-            "category": ai_result.get("category", "General"),
-            "priority": ai_result.get("priority", "medium").lower(),
-            "sentiment": "neutral",
-            "ai_confidence": clip_result.get("score", 0.0),
-            "auth_score": 50.0,
-            "status": "submitted",
-            "address": address or "",
-            "lat": float(lat),
-            "lng": float(lng),
-            "sla_days": ai_result.get("sla_days", 5.0),
-        }).execute()
-
-        grievance_id = None
-        if result.data:
-            grievance_id = result.data[0].get("complaint_id") or result.data[0].get("id")
-
-        if not grievance_id:
-            lookup = supabase.table("complaints").select("complaint_id").eq("tracking_token", tracking_token).limit(1).execute()
-            if lookup.data:
-                grievance_id = lookup.data[0]["complaint_id"]
-
-        if not grievance_id:
-            raise RuntimeError("Complaint insert did not return a complaint_id")
-    except Exception as e:
-        # Fallback if Supabase unavailable
-        print(f"Warning: Failed to save to Supabase: {str(e)}")
-        grievance_id = f"temp-{uuid4()}"
-        TEMP_COMPLAINTS[tracking_token] = {
-            "complaint_id": grievance_id,
-            "tracking_token": tracking_token,
-            "title": title,
-            "text_original": description,
-            "category": title,
-            "status": "submitted",
-            "lat": float(lat),
-            "lng": float(lng),
+        # AI classification
+        ai_result = {
+            "category": category or "General",
+            "priority": "medium",
+            "sla_days": 5.0
         }
-    
-    # Queue the routing engine as a background task
-    if background_tasks is not None:
+        clip_result = {"score": 0.0, "verified": True}
+
+        try:
+            from app.services.ai_pipeline import classify_text
+            if final_description and final_description != "No description":
+                ai_result = classify_text(final_description)
+        except Exception as e:
+            print(f"[AI] classify_text failed: {e}")
+
+        # Use citizen category if provided, else AI
+        final_category = category or ai_result.get("category", "General")
+
+        CATEGORY_CODES = {
+            "Roads": "ROADS",
+            "Water Supply": "WATER",
+            "Electricity": "ELEC",
+            "Sanitation": "SAN",
+            "Parks & Recreation": "PARKS",
+            "Health": "HEALTH",
+            "Traffic": "TRF",
+            "Drainage": "DRN",
+            "General": "GEN",
+        }
+        final_category_code = CATEGORY_CODES.get(final_category, "GEN")
+
+        # Image verification
+        image_bytes = None
+        if file and file.filename:
+            try:
+                image_bytes = await file.read()
+                from app.services.ai_pipeline import verify_image
+                clip_result = verify_image(final_description, image_bytes)
+            except Exception as e:
+                print(f"[AI] verify_image failed: {e}")
+
+        # Duplicate check
+        try:
+            from app.services.duplicate_service import check_duplicate
+            dup = check_duplicate(final_description, final_category)
+            if dup.get("is_duplicate"):
+                return {
+                    "status": "duplicate",
+                    "message": "Similar complaint already exists",
+                    "similarity": dup.get("similarity")
+                }
+        except Exception as e:
+            print(f"[AI] duplicate check failed: {e}")
+
+        # Generate tracking token
+        from app.services.token_generator import generate_tracking_token
+        from app.services.geo_mapper import get_ward_from_coordinates
+        from app.services.sla_service import calculate_sla
+
+        ward = get_ward_from_coordinates(lat, lng)
+        tracking_token = generate_tracking_token(final_category, ward)
+        sla_days = calculate_sla(
+            final_category,
+            ai_result.get("priority", "medium").upper()
+        )
+
+        # Save to Supabase
+        insert_data = {
+            "tracking_token": tracking_token,
+            "text_original": final_description,
+            "text_english": final_description,
+            "language_code": language_code or "en",
+            "category": final_category,
+            "category_code": final_category_code,
+            "priority": ai_result.get("priority", "medium"),
+            "status": "submitted",
+            "lat": lat,
+            "lng": lng,
+            "address": address or ward,
+            "sla_days": sla_days,
+            "ai_confidence": clip_result.get("score", 0.0),
+        }
+
+        result = supabase.table("complaints").insert(
+            insert_data
+        ).execute()
+
+        if not result.data:
+            raise Exception("Supabase insert returned no data")
+
+        complaint_id = result.data[0]["complaint_id"]
+        print(f"[GRIEVANCE] Saved: {tracking_token} | {final_category} | {final_description[:50]}")
+
+        # Background routing
         background_tasks.add_task(
-            run_routing_engine,
-            grievance_id,
+            _run_routing,
+            complaint_id,
             {
-                "description": description,
-                "category": ai_result.get("category", "General"),
+                "description": final_description,
+                "category": final_category,
                 "priority": ai_result.get("priority", "MEDIUM").upper(),
-                "sla_days": ai_result.get("sla_days", 5.0),
-                "sentiment": "Neutral",
-                "citizen_name": citizen_name,
-                "citizen_phone": citizen_phone,
+                "sla_days": sla_days,
+                "citizen_name": citizen_name or "Citizen",
+                "citizen_phone": citizen_phone or "",
                 "lat": lat,
                 "lng": lng,
-                "media_urls": [],                  # from uploaded file if any
-                "auth_score": 0.0
+                "auth_score": clip_result.get("score", 0.0) * 100,
+                "media_urls": [],
             }
         )
 
-    return {
-        "message": "Grievance submitted",
-        "status": "processing",
-        "grievance_id": grievance_id,
-        "tracking_token": tracking_token,
-    }
+        return {
+            "status": "success",
+            "grievance_id": complaint_id,
+            "tracking_token": tracking_token,
+            "category": final_category,
+            "sla_days": sla_days,
+            "message": "Complaint submitted successfully"
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"[GRIEVANCE ERROR] {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Submission error: {str(e)}"
+        )
+
+
+async def _run_routing(grievance_id: str, data: dict):
+    try:
+        from app.services.routing_engine import run_routing_engine
+        await run_routing_engine(grievance_id, data)
+    except Exception as e:
+        print(f"[ROUTING] Error: {e}")
 
 
 @router.get("/track/{token}")
@@ -349,60 +334,93 @@ async def test_duplicate(text: str = Form(...), category: str = Form(...)):
 
 
 @router.post("/test/transcribe-audio")
-async def transcribe_audio_route(file: UploadFile = File(...)):
-    import tempfile
-    import os
-    import subprocess
-    from app.services.ai_pipeline import transcribe_audio
-    
-    webm_path = None
-    wav_path = None
-    
+async def transcribe_audio_route(
+    file: UploadFile = File(...)
+):
+    from fastapi.responses import JSONResponse
+    import tempfile, os, subprocess
+
+    original_name = file.filename or "audio.webm"
+    ext = os.path.splitext(original_name)[1] or ".webm"
+
+    tmp_input = None
+    tmp_wav = None
+
     try:
-        # Save uploaded file to temp location
-        suffix = ".webm"
-        if file.filename:
-            ext = os.path.splitext(file.filename)[1]
-            if ext:
-                suffix = ext
-        
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        # Save uploaded file
+        with tempfile.NamedTemporaryFile(
+            suffix=ext, delete=False
+        ) as tmp:
             content = await file.read()
             tmp.write(content)
-            webm_path = tmp.name
-        
-        print(f"[TRANSCRIBE] Uploaded file saved to: {webm_path}")
-        
-        # Convert to wav if needed
-        wav_path = webm_path.replace(".webm", ".wav").replace(".webm", ".wav")
-        if webm_path.endswith((".webm", ".ogg", ".m4a")):
-            print(f"[TRANSCRIBE] Converting to WAV using ffmpeg...")
-            try:
-                subprocess.run([
-                    "ffmpeg", "-i", webm_path,
-                    "-ar", "16000", "-ac", "1",
-                    "-f", "wav", wav_path,
-                    "-y", "-loglevel", "quiet"
-                ], check=True, timeout=30)
-                print(f"[TRANSCRIBE] Conversion OK: {wav_path}")
-                transcribe_path = wav_path
-            except subprocess.CalledProcessError as e:
-                print(f"[TRANSCRIBE] ffmpeg failed: {e}, trying direct transcription")
-                transcribe_path = webm_path
-        else:
-            transcribe_path = webm_path
-        
-        # Call Whisper transcription
-        result = transcribe_audio(transcribe_path)
-        return result
-    
+            tmp_input = tmp.name
+
+        print(f"[TRANSCRIBE] Saved to: {tmp_input}")
+        print(f"[TRANSCRIBE] File size: {os.path.getsize(tmp_input)} bytes")
+
+        # Convert to wav
+        tmp_wav = tmp_input.replace(ext, ".wav")
+        try:
+            subprocess.run([
+                "ffmpeg", "-i", tmp_input,
+                "-ar", "16000", "-ac", "1",
+                "-f", "wav", tmp_wav,
+                "-y", "-loglevel", "quiet"
+            ], timeout=60, check=True)
+            use_path = tmp_wav
+            print(f"[TRANSCRIBE] Converted to WAV")
+        except Exception as conv_err:
+            print(f"[TRANSCRIBE] ffmpeg failed: {conv_err}, using original")
+            use_path = tmp_input
+
+        # Try whisper
+        try:
+            import whisper
+        except ModuleNotFoundError:
+            print("[TRANSCRIBE] Installing whisper...")
+            import subprocess as sp, sys
+            sp.run([
+                sys.executable, "-m", "pip",
+                "install", "openai-whisper", "-q"
+            ], check=True, timeout=180)
+            import whisper
+
+        print("[TRANSCRIBE] Loading whisper model...")
+        model = whisper.load_model("base")
+        print("[TRANSCRIBE] Starting transcription (may take 30-60 seconds)...")
+        result = model.transcribe(use_path, fp16=False)
+        transcript = result.get("text", "").strip()
+        print(f"[TRANSCRIBE] Success: {transcript[:80]}")
+
+        return JSONResponse(
+            {
+                "transcript": transcript,
+                "success": True
+            },
+            headers={
+                "Connection": "keep-alive",
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
     except Exception as e:
-        print(f"[TRANSCRIBE] Error: {e}")
-        return {"transcript": "", "success": False, "error": str(e)}
-    
+        print(f"[TRANSCRIBE] Error: {type(e).__name__}: {e}")
+        return JSONResponse(
+            {
+                "transcript": "",
+                "success": False,
+                "error": str(e)
+            },
+            status_code=500,
+            headers={
+                "Connection": "keep-alive",
+                "Cache-Control": "no-cache"
+            }
+        )
     finally:
-        # Clean up temp files
-        for path in [webm_path, wav_path]:
+        # Cleanup
+        for path in [tmp_input, tmp_wav]:
             if path and os.path.exists(path):
                 try:
                     os.unlink(path)

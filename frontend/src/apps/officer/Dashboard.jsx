@@ -5,13 +5,6 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import CountUpBase from 'react-countup';
 const CountUp = CountUpBase.default || CountUpBase;
 
-const fallbackComplaints = [
-  { id: '#CMP-8925', title: 'Major pothole causing traffic jam on NH-44', cat: 'Roads', dept: 'PWD', citizen: 'Rahul Sharma', priority: 'high', slaHours: 0.25, status: 'urgent', critical: true },
-  { id: '#CMP-8924', title: 'Streetlight not working near school zone', cat: 'Infrastructure', dept: 'BESCOM', citizen: 'Priya Nair', priority: 'medium', slaHours: 4.5, status: 'in_progress', critical: false },
-  { id: '#CMP-8922', title: 'Water supply disruption in residential area', cat: 'Utilities', dept: 'BWSSB', citizen: 'Anil Desai', priority: 'high', slaHours: 8, status: 'assigned', critical: false },
-  { id: '#CMP-8920', title: 'Garbage not collected for 3 consecutive days', cat: 'Sanitation', dept: 'BBMP', citizen: 'Suresh Rao', priority: 'low', slaHours: 22, status: 'submitted', critical: false },
-];
-
 const escalations = [
   { id: '#CMP-8899', reason: 'SLA breached by 4 days', level: 3 },
   { id: '#CMP-8910', reason: 'Citizen complaint escalated', level: 2 },
@@ -54,30 +47,57 @@ const FILTERS = ['All (142)', 'High Priority (28)', 'SLA Warning (18)'];
 export function Dashboard() {
   const [activeFilter, setActiveFilter] = useState(0);
   const [complaints, setComplaints] = useState([]);
+  const [stats, setStats] = useState({
+    total: 0, high: 0, resolved: 0, active: 0
+  });
 
   useEffect(() => {
-    const loadComplaints = async () => {
+    const load = async () => {
       try {
-        const { getAssignedComplaints } = await import('../../services/api');
-        const data = await getAssignedComplaints();
-        setComplaints(Array.isArray(data) ? data : []);
+        const res = await fetch('/officer/assigned', {
+          headers: {
+            Authorization: `Bearer ${
+              localStorage.getItem('jansetu_token')
+            }`
+          }
+        });
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          setComplaints(data.slice(0, 5));
+          setStats({
+            total: data.length,
+            active: data.filter(
+              c => c.status !== 'resolved' &&
+                   c.status !== 'closed'
+            ).length,
+            high: data.filter(
+              c => c.priority === 'high' ||
+                   c.priority === 'HIGH' ||
+                   c.priority === 'critical'
+            ).length,
+            resolved: data.filter(
+              c => c.status === 'resolved'
+            ).length,
+          });
+        }
       } catch (err) {
-        console.error('Failed to load complaints:', err);
+        console.error('[DASHBOARD]', err);
       }
     };
-    loadComplaints();
+    load();
   }, []);
 
-  const visibleComplaints = (complaints.length ? complaints : fallbackComplaints).map((c) => ({
-    id: c.id || (c.complaint_id ? `#${c.complaint_id}` : '#CMP-0000'),
-    title: c.title || c.text_original || 'Complaint',
-    cat: c.cat || c.category || 'General',
-    dept: c.dept || c.department || 'JanSetu',
-    citizen: c.citizen || c.citizen_name || 'Citizen',
+  const visibleComplaints = complaints.map((c) => ({
+    id: c.tracking_token || (c.complaint_id ? `#${c.complaint_id}` : '#CMP-0000'),
+    title: c.text_original || 'Complaint',
+    cat: c.category || 'General',
+    dept: c.department || 'JanSetu',
+    citizen: c.citizen_name || 'Citizen',
     priority: (c.priority || 'medium').toString().toLowerCase(),
-    slaHours: Number(c.slaHours ?? c.sla_hours ?? 24),
+    slaHours: Number(c.sla_days ?? 5) * 24,
     status: (c.status || 'assigned').toString().toLowerCase(),
-    critical: Boolean(c.critical || Number(c.slaHours ?? c.sla_hours ?? 24) < 1),
+    critical: Boolean((c.priority || '').toString().toLowerCase() === 'high'),
   }));
 
   return (
@@ -86,23 +106,15 @@ export function Dashboard() {
       {/* KPI Strip */}
       <div className="kpi-grid stagger-children" style={{ marginBottom: 28 }}>
         {[
-          { label: 'Total Complaints', value: '1,284', trend: '+12%', up: true  },
-          { label: 'Active Cases',     value: '142',   trend: '-5%',  up: false },
-          { label: 'SLA Breaches',     value: '18',    trend: '⚠ Alert', up: false, red: true },
-          { label: 'Resolved Today',   value: '45',    trend: '+8%',  up: true, green: true },
+          { label: 'Total Complaints', value: stats.total, trend: '+12%', up: true  },
+          { label: 'Active Cases',     value: stats.active, trend: '-5%',  up: false },
+          { label: 'High Priority',    value: stats.high, trend: '⚠ Alert', up: false, red: true },
+          { label: 'Resolved',         value: stats.resolved, trend: '+8%',  up: true, green: true },
         ].map((k, i) => (
           <GlassCard key={i} layer={3} className="kpi-card animate-fade-up">
             <span className="kpi-card__label">{k.label}</span>
             <span className="kpi-card__value" style={{ color: k.red ? 'var(--color-urgent-text)' : k.green ? 'var(--color-success-text)' : 'var(--color-accent)' }}>
-              {k.value === '18' ? (
-                <CountUp end={18} duration={1.2} />
-              ) : k.value === '142' ? (
-                <CountUp end={142} duration={1.2} />
-              ) : k.value === '45' ? (
-                <CountUp end={45} duration={1.2} />
-              ) : (
-                <CountUp end={1284} duration={1.2} separator="," />
-              )}
+              <CountUp end={Number(k.value) || 0} duration={1.2} separator="," />
             </span>
             <span className="kpi-card__trend" style={{ color: k.up ? 'var(--color-success-text)' : k.red ? 'var(--color-urgent-text)' : 'var(--color-warning-text)' }}>
               {k.up ? <TrendingUp size={14}/> : k.red ? <AlertTriangle size={14}/> : <TrendingDown size={14}/>}

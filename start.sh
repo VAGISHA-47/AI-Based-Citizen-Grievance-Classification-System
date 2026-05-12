@@ -10,13 +10,13 @@ sleep 1
 echo "Installing AI dependencies..."
 pip install openai-whisper -q 2>/dev/null || true
 sudo apt-get install -y ffmpeg -q 2>/dev/null || true
+pip install openai-whisper -q 2>/dev/null || true
 echo "AI dependencies ready"
 
 # Update frontend env
-BACKEND_URL="https://${CODESPACE_NAME}-8000.app.github.dev"
-echo "VITE_API_URL=${BACKEND_URL}" > /workspaces/AI-Based-Citizen-Grievance-Classification-System/frontend/.env
+echo "VITE_API_URL=" > /workspaces/AI-Based-Citizen-Grievance-Classification-System/frontend/.env
 echo "VITE_SUPABASE_URL=https://apxaknwrsemylziyxbpj.supabase.co" >> /workspaces/AI-Based-Citizen-Grievance-Classification-System/frontend/.env
-echo "Backend URL: ${BACKEND_URL}"
+echo "Frontend env set to use proxy (no hardcoded URL needed)"
 
 # Start backend
 cd /workspaces/AI-Based-Citizen-Grievance-Classification-System/backend
