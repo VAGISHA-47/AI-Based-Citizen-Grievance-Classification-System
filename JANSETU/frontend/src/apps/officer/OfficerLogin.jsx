@@ -15,13 +15,14 @@ export function OfficerLogin() {
     setLoading(true);
     setError('');
     try {
-      const { loginUser } = await import('../../services/api');
+      const { loginOfficer } = await import('../../services/api');
       const phoneInput = e.target.querySelector('input[type="tel"]')?.value
         || e.target.querySelector('input[name="phone"]')?.value
         || e.target.querySelectorAll('input')[0]?.value;
       const passwordInput = e.target.querySelector('input[type="password"]')?.value;
+      const normalizedPhone = (phoneInput || '').replace(/\s+/g, '');
 
-      const data = await loginUser({ phone: phoneInput, password: passwordInput });
+      const data = await loginOfficer({ phone: normalizedPhone, password: passwordInput });
 
       if (data.role === 'officer' || data.role === 'admin') {
         localStorage.setItem('jansetu_token', data.access_token);

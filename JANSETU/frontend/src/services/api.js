@@ -30,6 +30,21 @@ export const registerUser = (data) =>
 export const loginUser = (data) =>
   apiRequest("/auth/login", { method: "POST", body: JSON.stringify(data) });
 
+export const loginOfficer = async (data) => {
+  try {
+    return await apiRequest("/api/v1/auth/officer-login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    // Backward-compatible fallback for older backend deployments.
+    if ((err.message || "").includes("404") || (err.message || "").includes("405")) {
+      return apiRequest("/auth/login", { method: "POST", body: JSON.stringify(data) });
+    }
+    throw err;
+  }
+};
+
 export const getMe = () => apiRequest("/auth/me");
 
 // LOCATIONS (for officer login dropdowns)

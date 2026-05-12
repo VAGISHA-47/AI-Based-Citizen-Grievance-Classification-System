@@ -109,7 +109,10 @@ export function FileComplaint() {
           const data = await res.json().catch(() => ({}));
           console.log("[VOICE] Response:", data);
           if (data.transcript) {
-            setTranscript(data.transcript);
+            const cleanTranscript = String(data.transcript).trim();
+            setTranscript(cleanTranscript);
+            // Persist transcript into complaint text if user has not typed one yet.
+            setText((prev) => (prev && prev.trim() ? prev : cleanTranscript));
           } else if (data.error) {
             console.error("[VOICE] Error:", data.error);
             setTranscript("Could not transcribe. Please type manually.");
@@ -148,8 +151,9 @@ export function FileComplaint() {
     setSubmitting(true);
     try {
       const { submitComplaint } = await import('../../services/api');
+      const complaintText = (text || transcript || 'No description provided').trim();
       const response = await submitComplaint({
-        text: text || 'No description provided',
+        text: complaintText,
         language: lang,
         lat: gps?.lat ?? 19.076,
         lng: gps?.lng ?? 72.877,

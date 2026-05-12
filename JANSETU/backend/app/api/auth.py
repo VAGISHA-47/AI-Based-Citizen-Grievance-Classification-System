@@ -16,12 +16,29 @@ def _supabase():
     return supabase
 
 
+def _phone_candidates(identifier: str) -> list[str]:
+    raw = (identifier or "").strip()
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    candidates: list[str] = []
+    for value in [raw, raw.replace(" ", ""), digits]:
+        if value and value not in candidates:
+            candidates.append(value)
+    if digits:
+        last10 = digits[-10:]
+        for value in [last10, f"+91{last10}", f"91{last10}"]:
+            if value and value not in candidates:
+                candidates.append(value)
+    return candidates
+
+
 def _lookup_user(identifier: str) -> dict | None:
     sb = _supabase()
-    # Try phone first, then email
-    r = sb.table("users").select("*").eq("phone", identifier).execute()
-    if not r.data:
-        r = sb.table("users").select("*").eq("email", identifier).execute()
+    # Try phone with common normalized variants, then email.
+    for candidate in _phone_candidates(identifier):
+        r = sb.table("users").select("*").eq("phone", candidate).limit(1).execute()
+        if r.data:
+            return r.data[0]
+    r = sb.table("users").select("*").eq("email", (identifier or "").strip()).limit(1).execute()
     return r.data[0] if r.data else None
 
 

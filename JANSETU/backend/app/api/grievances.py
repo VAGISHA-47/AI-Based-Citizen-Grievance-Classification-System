@@ -1,4 +1,5 @@
 from uuid import uuid4
+import subprocess
 
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException, Request
 
@@ -309,7 +310,7 @@ async def test_duplicate(text: str = Form(...), category: str = Form(...)):
 
 @router.post("/test/transcribe-audio")
 async def transcribe_audio_route(file: UploadFile = File(...)):
-    import tempfile, os, subprocess
+    import tempfile, os
     from app.services.ai_pipeline import transcribe_audio
 
     webm_path = None
@@ -330,15 +331,27 @@ async def transcribe_audio_route(file: UploadFile = File(...)):
         wav_path = webm_path.replace(suffix, ".wav")
         if webm_path.endswith((".webm", ".ogg", ".m4a")):
             try:
+                # Try ffmpeg first
                 subprocess.run([
                     "ffmpeg", "-i", webm_path,
                     "-ar", "16000", "-ac", "1",
                     "-f", "wav", wav_path,
                     "-y", "-loglevel", "quiet"
-                ], check=True, timeout=30)
+                ], timeout=30, check=True)
                 transcribe_path = wav_path
-            except subprocess.CalledProcessError:
-                transcribe_path = webm_path
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # ffmpeg not available — try pydub
+                print("[TRANSCRIBE] ffmpeg not found, trying pydub...")
+                try:
+                    from pydub import AudioSegment
+                    audio = AudioSegment.from_file(webm_path)
+                    audio = audio.set_frame_rate(16000).set_channels(1)
+                    audio.export(wav_path, format="wav")
+                    transcribe_path = wav_path
+                    print("[TRANSCRIBE] pydub conversion successful")
+                except Exception as pydub_err:
+                    print(f"[TRANSCRIBE] pydub also failed: {pydub_err}")
+                    transcribe_path = webm_path
         else:
             transcribe_path = webm_path
 
